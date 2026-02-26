@@ -1,5 +1,5 @@
 """venting v8.4 package."""
 
-from .cases import CaseConfig, NetworkConfig, SolveResult
+__all__ = ["__version__"]
 
-__all__ = ["CaseConfig", "NetworkConfig", "SolveResult"]
+__version__ = "0.8.4"

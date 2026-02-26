@@ -1,8 +1,8 @@
+import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
-import math
 import numpy as np
 
 
@@ -43,7 +43,9 @@ def make_profile_step(p0: float, step_time_s: float) -> Profile:
     return Profile("step", p_fn, events=((step_time_s, "step_to_vacuum"),))
 
 
-def make_profile_exponential(p0: float, rate0_mmhg_per_s: float, p_floor: float = 10.0) -> Profile:
+def make_profile_exponential(
+    p0: float, rate0_mmhg_per_s: float, p_floor: float = 10.0
+) -> Profile:
     rate0 = rate0_mmhg_per_s * 133.322
     tau = p0 / rate0
     t_floor = tau * math.log(p0 / p_floor)
@@ -51,7 +53,11 @@ def make_profile_exponential(p0: float, rate0_mmhg_per_s: float, p_floor: float 
     def p_fn(t: float) -> float:
         return p0 * math.exp(-t / tau)
 
-    return Profile("barometric_exp", p_fn, events=((0.0, "start_max_slope"), (t_floor, f"P_ext={p_floor:.0f}Pa")))
+    return Profile(
+        "barometric_exp",
+        p_fn,
+        events=((0.0, "start_max_slope"), (t_floor, f"P_ext={p_floor:.0f}Pa")),
+    )
 
 
 def make_profile_from_table(name: str, table_path: Path) -> Profile:

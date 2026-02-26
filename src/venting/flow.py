@@ -11,7 +11,9 @@ def mu_air_sutherland(T: float) -> float:
     return mu0 * (t_eff / t_ref) ** 1.5 * (t_ref + s) / (t_eff + s)
 
 
-def mdot_orifice_pos(P_up: float, T_up: float, P_dn: float, Cd: float, A: float) -> float:
+def mdot_orifice_pos(
+    P_up: float, T_up: float, P_dn: float, Cd: float, A: float
+) -> float:
     if P_up <= 0.0 or A <= 0.0:
         return 0.0
     t_eff = max(T_up, T_SAFE)
@@ -23,10 +25,17 @@ def mdot_orifice_pos(P_up: float, T_up: float, P_dn: float, Cd: float, A: float)
     bracket = r ** (2.0 / GAMMA) - r ** ((GAMMA + 1.0) / GAMMA)
     if bracket <= 0.0:
         return 0.0
-    return Cd * A * P_up * math.sqrt(2.0 * GAMMA / ((GAMMA - 1.0) * R_GAS * t_eff) * bracket)
+    return (
+        Cd
+        * A
+        * P_up
+        * math.sqrt(2.0 * GAMMA / ((GAMMA - 1.0) * R_GAS * t_eff) * bracket)
+    )
 
 
-def mdot_slot_pos(P_up: float, T_up: float, P_dn: float, w: float, delta: float, L: float) -> float:
+def mdot_slot_pos(
+    P_up: float, T_up: float, P_dn: float, w: float, delta: float, L: float
+) -> float:
     if P_up <= 0.0:
         return 0.0
     t_eff = max(T_up, T_SAFE)

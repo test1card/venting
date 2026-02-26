@@ -18,7 +18,12 @@ def plot_basic(outdir: Path, name: str, res, node_idx: int = 0) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(11, 6))
-    ax.plot(res.t, (res.P[node_idx] - res.P_ext) / 1e3, lw=2, label=f"ΔP(node{node_idx}→ext) [kPa]")
+    ax.plot(
+        res.t,
+        (res.P[node_idx] - res.P_ext) / 1e3,
+        lw=2,
+        label=f"ΔP(node{node_idx}→ext) [kPa]",
+    )
     ax.set(xlabel="t, s", ylabel="ΔP, kPa", title=f"{name}: ΔP vs time")
     ax.grid(True, alpha=0.3)
     ax.legend()

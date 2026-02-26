@@ -1,16 +1,19 @@
 # venting (v8.4 only)
 
-This repository contains **one active model version: v8.4** of the edge-based 0D venting solver.
-Legacy versions are archived and must not participate in CLI, tests, or CI.
+This repository contains only one active runtime model version: **v8.4**.
+All legacy scripts are archived in `archive/` and are not imported by package runtime.
 
-## Install
+## Quickstart
 
 ```bash
-pip install -r requirements-dev.txt
-pip install -e .
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+python -m venting.cli --help
+python -m venting.cli gate
 ```
 
-## CLI
+## CLI examples
 
 ```bash
 python -m venting.cli gate --single
@@ -20,18 +23,15 @@ python -m venting.cli thermal --profile linear --d 2 --h-list 0,1,5,15
 python -m venting.cli sweep2d --profile linear --d-int-list 1.5,2.0 --d-exit-list 1.5,2.0
 ```
 
-Results are stored in `results/<timestamp>_<case>/`.
+All run artifacts are saved in `results/<timestamp>_<case>/` and include:
+- `run.json`
+- `summary.csv`
+- binary solver output (`*.npz`) and metadata (`*_meta.json`)
 
-## Verification
+## Quality checks
 
 ```bash
-pytest -q
 ruff check .
 black --check .
+pytest -q --cov=venting --cov-report=term-missing
 ```
-
-## Model policy
-
-- No state clipping for pressure/temperature.
-- Only denominator safeguards (`T_SAFE`, tiny mass threshold in `dT` denominator).
-- Intermediate model uses upstream temperature for mass-flow terms.

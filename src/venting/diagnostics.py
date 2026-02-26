@@ -1,10 +1,10 @@
-from dataclasses import asdict
 import math
+from dataclasses import asdict
 
 import numpy as np
 
 from .cases import CaseConfig, SolveResult
-from .constants import C_CHOKED, PI_C, P0, R_GAS, T0, T_SAFE
+from .constants import C_CHOKED, P0, PI_C, R_GAS, T0, T_SAFE
 from .graph import EXT_NODE, GasNode, OrificeEdge, SlotChannelEdge
 
 
@@ -15,7 +15,9 @@ def compute_tau_exit(total_volume: float, Cd_exit: float, A_exit_total: float) -
     return (total_volume * P0) / (R_GAS * T0 * mdot_ch)
 
 
-def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseConfig, sol) -> SolveResult:
+def summarize_result(
+    nodes: list[GasNode], edges: list, bcs: list, case: CaseConfig, sol
+) -> SolveResult:
     N = len(nodes)
     V = np.array([n.V for n in nodes], dtype=float)
     profile = bcs[0].profile
@@ -43,7 +45,9 @@ def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseCon
             Cd_exit = e.Cd_model()
             break
     if A_exit_total is None:
-        A_exit_total = max((e.A_total for e in edges if isinstance(e, OrificeEdge)), default=0.0)
+        A_exit_total = max(
+            (e.A_total for e in edges if isinstance(e, OrificeEdge)), default=0.0
+        )
         Cd_exit = 0.62
     tau_exit = compute_tau_exit(total_volume, float(Cd_exit), float(A_exit_total))
 
@@ -62,8 +66,14 @@ def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseCon
         edge_obj = next(
             e
             for e in edges
-            if (isinstance(e, OrificeEdge) and (e.label or f"orifice({e.a}->{e.b})") == label)
-            or (isinstance(e, SlotChannelEdge) and (e.label or f"slot({e.a}->{e.b})") == label)
+            if (
+                isinstance(e, OrificeEdge)
+                and (e.label or f"orifice({e.a}->{e.b})") == label
+            )
+            or (
+                isinstance(e, SlotChannelEdge)
+                and (e.label or f"slot({e.a}->{e.b})") == label
+            )
         )
         if isinstance(edge_obj, OrificeEdge):
             a, b = edge_obj.a, edge_obj.b
@@ -78,7 +88,9 @@ def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseCon
             r_pk = (p_dn / p_up) if p_up > 0 else 0.0
             peak_diag[label] = {
                 "t_peak": float(t[idx]),
-                "t_peak_over_tau_exit": float(t[idx] / tau_exit) if np.isfinite(tau_exit) else float("nan"),
+                "t_peak_over_tau_exit": (
+                    float(t[idx] / tau_exit) if np.isfinite(tau_exit) else float("nan")
+                ),
                 "P_up": p_up,
                 "P_down": p_dn,
                 "r": float(r_pk),
@@ -93,7 +105,9 @@ def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseCon
             Pb = float(P[b, idx])
             peak_diag[label] = {
                 "t_peak": float(t[idx]),
-                "t_peak_over_tau_exit": float(t[idx] / tau_exit) if np.isfinite(tau_exit) else float("nan"),
+                "t_peak_over_tau_exit": (
+                    float(t[idx] / tau_exit) if np.isfinite(tau_exit) else float("nan")
+                ),
                 "P_up": max(Pa, Pb),
                 "P_down": min(Pa, Pb),
                 "r": float(min(Pa, Pb) / max(Pa, Pb)) if max(Pa, Pb) > 0 else 0.0,
@@ -115,4 +129,14 @@ def summarize_result(nodes: list[GasNode], edges: list, bcs: list, case: CaseCon
             "n_steps": int(len(sol.t)),
         },
     }
-    return SolveResult(t=t, m=m, T=T, P=P, P_ext=P_ext, peak_diag=peak_diag, max_dP=max_dP, tau_exit=tau_exit, meta=meta)
+    return SolveResult(
+        t=t,
+        m=m,
+        T=T,
+        P=P,
+        P_ext=P_ext,
+        peak_diag=peak_diag,
+        max_dP=max_dP,
+        tau_exit=tau_exit,
+        meta=meta,
+    )

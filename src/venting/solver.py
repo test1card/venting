@@ -8,7 +8,9 @@ from .flow import mdot_orifice_pos, mdot_slot_pos
 from .graph import EXT_NODE, ExternalBC, GasNode, OrificeEdge, SlotChannelEdge
 
 
-def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig):
+def build_rhs(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
     N = len(nodes)
     V = np.array([n.V for n in nodes], dtype=float)
     A_w = np.array([n.A_wall for n in nodes], dtype=float)
@@ -18,6 +20,7 @@ def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: Ca
         return m * R_GAS * T / V
 
     if case.thermo == "isothermal":
+
         def rhs(t: float, y: np.ndarray) -> np.ndarray:
             m = y[:N]
             T = np.full(N, T0)
@@ -124,12 +127,18 @@ def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: Ca
     return rhs, 2 * N
 
 
-def solve_case(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig):
+def solve_case(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
     N = len(nodes)
     V = np.array([n.V for n in nodes], dtype=float)
     rhs, n_vars = build_rhs(nodes, edges, bcs, case)
     m0 = P0 * V / (R_GAS * T0)
-    y0 = m0.copy() if case.thermo == "isothermal" else np.concatenate([m0, np.full(N, T0)])
+    y0 = (
+        m0.copy()
+        if case.thermo == "isothermal"
+        else np.concatenate([m0, np.full(N, T0)])
+    )
     t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
 
     jac = lil_matrix((n_vars, n_vars))
@@ -149,8 +158,10 @@ def solve_case(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: C
 
     events = []
     for i in range(N):
+
         def ev_mi(t, y, ii=i):
             return y[ii] + 1e-15
+
         ev_mi.terminal = True
         ev_mi.direction = -1
         events.append(ev_mi)

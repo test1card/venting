@@ -1,8 +1,8 @@
+from __future__ import annotations
+
 import argparse
-from datetime import datetime
 from pathlib import Path
 
-import json
 import numpy as np
 
 from .cases import CaseConfig, NetworkConfig
@@ -11,8 +11,14 @@ from .diagnostics import summarize_result
 from .gates import gate_single, gate_two
 from .geometry import mm2_to_m2, mm3_to_m3
 from .graph import build_branching_network
+from .io import dump_meta_json, make_results_dir, write_run_json, write_summary_csv
 from .plotting import plot_basic
-from .profiles import make_profile_exponential, make_profile_from_table, make_profile_linear, make_profile_step
+from .profiles import (
+    make_profile_exponential,
+    make_profile_from_table,
+    make_profile_linear,
+    make_profile_step,
+)
 from .solver import solve_case
 
 
@@ -24,13 +30,6 @@ def _profile(args):
     if args.profile == "barometric":
         return make_profile_exponential(P0, args.rate_mmhg, p_floor=10.0)
     return make_profile_from_table("envelope_table", Path(args.profile_file))
-
-
-def _outdir(case_name: str) -> Path:
-    stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    p = Path("results") / f"{stamp}_{case_name}"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
 
 
 def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
@@ -68,16 +67,43 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
     sol = solve_case(nodes, edges, bcs, case)
     res = summarize_result(nodes, edges, bcs, case, sol)
 
-    out = _outdir(args.cmd)
-    name = f"v84_{prof.name}_{case.thermo}_dint{d_int:g}_dexit{d_exit:g}_h{case.h_conv:g}"
-    np.savez_compressed(out / f"{name}.npz", t=res.t, m=res.m, T=res.T, P=res.P, P_ext=res.P_ext, tau_exit=res.tau_exit)
-    with open(out / f"{name}_meta.json", "w", encoding="utf-8") as f:
-        json.dump(res.meta, f, ensure_ascii=False, indent=2)
+    out = make_results_dir(args.cmd)
+    name = (
+        f"v84_{prof.name}_{case.thermo}_dint{d_int:g}_"
+        f"dexit{d_exit:g}_h{case.h_conv:g}"
+    )
+    np.savez_compressed(
+        out / f"{name}.npz",
+        t=res.t,
+        m=res.m,
+        T=res.T,
+        P=res.P,
+        P_ext=res.P_ext,
+        tau_exit=res.tau_exit,
+    )
+    dump_meta_json(out, f"{name}_meta.json", res.meta)
+    write_summary_csv(out, res)
+    write_run_json(
+        out,
+        params={
+            "command": args.cmd,
+            "profile": args.profile,
+            "d_int": d_int,
+            "d_exit": d_exit,
+            "thermo": case.thermo,
+            "h": case.h_conv,
+            "duration": case.duration,
+            "npts": case.n_pts,
+            "cd_int": args.cd_int,
+            "cd_exit": args.cd_exit,
+        },
+        solver_settings={"method": "Radau", "rtol": "1e-7|1e-6", "atol": "1e-10|1e-8"},
+    )
     if args.do_plots:
         plot_basic(out, name, res)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="venting")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -87,14 +113,20 @@ def main():
 
     for name in ["sweep", "thermal", "sweep2d"]:
         s = sub.add_parser(name)
-        s.add_argument("--profile", default="linear", choices=["linear", "step", "barometric", "table"])
+        s.add_argument(
+            "--profile",
+            default="linear",
+            choices=["linear", "step", "barometric", "table"],
+        )
         s.add_argument("--profile-file", default="")
         s.add_argument("--rate-mmhg", type=float, default=20.0)
         s.add_argument("--step-time", type=float, default=0.01)
-        s.add_argument("--thermo", default="isothermal", choices=["isothermal", "intermediate"])
+        s.add_argument(
+            "--thermo", default="isothermal", choices=["isothermal", "intermediate"]
+        )
         s.add_argument("--h", type=float, default=0.0)
         s.add_argument("--duration", type=float, default=150.0)
-        s.add_argument("--npts", type=int, default=2000)
+        s.add_argument("--npts", type=int, default=800)
         s.add_argument("--n-int", type=int, default=1)
         s.add_argument("--n-exit", type=int, default=1)
         s.add_argument("--cd-int", type=float, default=0.62)
@@ -109,15 +141,18 @@ def main():
 
     sub.choices["sweep2d"].add_argument("--d-int-list", default="1.0,2.0")
     sub.choices["sweep2d"].add_argument("--d-exit-list", default="1.0,2.0")
+    return p
 
-    args = p.parse_args()
+
+def main() -> None:
+    args = build_parser().parse_args()
     if args.cmd == "gate":
-        if args.single:
-            m = gate_single()
-            print(m)
-        if args.two:
-            m = gate_two()
-            print(m)
+        run_single = args.single or (not args.single and not args.two)
+        run_two = args.two or (not args.single and not args.two)
+        if run_single:
+            print(gate_single())
+        if run_two:
+            print(gate_two())
         return
     if args.cmd == "sweep":
         _run_one(args, args.d_int, args.d_exit)
@@ -127,11 +162,12 @@ def main():
         for h in hs:
             _run_one(args, args.d, args.d, h=h)
         return
+
     d_ints = [float(x) for x in args.d_int_list.split(",") if x]
     d_exits = [float(x) for x in args.d_exit_list.split(",") if x]
-    for di in d_ints:
-        for de in d_exits:
-            _run_one(args, di, de)
+    for d_int in d_ints:
+        for d_exit in d_exits:
+            _run_one(args, d_int, d_exit)
 
 
 if __name__ == "__main__":

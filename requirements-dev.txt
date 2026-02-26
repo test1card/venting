@@ -1,5 +1,1 @@
--r requirements.txt
-matplotlib>=3.7
-pytest>=7.4
-ruff>=0.6
-black>=24.0
+-e .[dev]
