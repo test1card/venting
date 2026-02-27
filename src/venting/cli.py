@@ -3,30 +3,18 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
-
 from .cases import CaseConfig, NetworkConfig
 from .constants import P0, P_STOP, T0
-from .diagnostics import summarize_result
 from .gates import gate_single, gate_two
-from .geometry import mm2_to_m2, mm3_to_m3
-from .graph import build_branching_network
-from .io import (
-    dump_meta_json,
-    make_results_dir,
-    print_validity_summary,
-    write_run_json,
-    write_summary_csv,
-    write_validity_json,
-)
 from .plotting import plot_basic
+from .presets import get_default_panel_preset_v9
 from .profiles import (
     make_profile_exponential,
     make_profile_from_table,
     make_profile_linear,
     make_profile_step,
 )
-from .solver import solve_case
+from .run import export_case_artifacts, make_case_output_dir, run_case
 
 
 def _profile(args):
@@ -47,19 +35,17 @@ def _profile(args):
 
 def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
     prof = _profile(args)
-    A_cell_mm2, A_vest_mm2, h_mm = 4708.2806538, 5199.9595503, 27.9430913
-    V_cell = mm3_to_m3(A_cell_mm2 * h_mm)
-    V_vest = mm3_to_m3(A_vest_mm2 * h_mm)
-    A_wall_cell = mm2_to_m2(2 * A_cell_mm2 + 313.0 * h_mm)
-    A_wall_vest = mm2_to_m2(2 * A_vest_mm2 + 350.0 * h_mm)
+    preset = get_default_panel_preset_v9()
 
     net_cfg = NetworkConfig(
         N_chain=10,
         N_par=2,
-        V_cell=V_cell,
-        V_vest=V_vest,
-        A_wall_cell=A_wall_cell,
-        A_wall_vest=A_wall_vest,
+        topology=args.topology,
+        N_chain_b=args.n_chain_b,
+        V_cell=preset.V_cell,
+        V_vest=preset.V_vest,
+        A_wall_cell=preset.A_wall_cell,
+        A_wall_vest=preset.A_wall_vest,
         d_int_mm=d_int,
         n_int_per_interface=args.n_int,
         d_exit_mm=d_exit,
@@ -102,63 +88,48 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         P_ult_Pa=args.P_ult_Pa,
     )
 
-    nodes, edges, bcs = build_branching_network(net_cfg, prof)
-    sol = solve_case(nodes, edges, bcs, case)
-    res = summarize_result(nodes, edges, bcs, case, sol)
+    res = run_case(net_cfg, prof, case)
 
-    out = make_results_dir(args.cmd)
+    out = make_case_output_dir(args.cmd)
     name = (
-        f"v900_{args.external_model}_{prof.name}_{case.thermo}_"
+        f"v1000_{args.external_model}_{prof.name}_{case.thermo}_"
         f"dint{d_int:g}_dexit{d_exit:g}_h{case.h_conv:g}"
     )
-    np.savez_compressed(
-        out / f"{name}.npz",
-        t=res.t,
-        m=res.m,
-        T=res.T,
-        P=res.P,
-        P_ext=res.P_ext,
-        tau_exit=res.tau_exit,
-    )
-    dump_meta_json(out, f"{name}_meta.json", res.meta)
-    write_validity_json(out, name, res.meta.get("validity_flags", {}))
-    print_validity_summary(res.meta.get("validity_flags", {}))
-    write_summary_csv(out, res)
-    write_run_json(
-        out,
-        params={
-            "command": args.cmd,
-            "profile": args.profile,
-            "external_model": args.external_model,
-            "d_int": d_int,
-            "d_exit": d_exit,
-            "thermo": case.thermo,
-            "wall_model": case.wall_model,
-            "h": case.h_conv,
-            "duration": case.duration,
-            "npts": case.n_pts,
-            "cd_int": args.cd_int,
-            "cd_exit": args.cd_exit,
-            "int_model": args.int_model,
-            "exit_model": args.exit_model,
-            "L_int_mm": args.L_int_mm,
-            "L_exit_mm": args.L_exit_mm,
-            "K_in_int": net_cfg.K_in_int,
-            "K_out_int": net_cfg.K_out_int,
-            "eps_int_um": net_cfg.eps_int_um,
-            "K_in_exit": net_cfg.K_in_exit,
-            "K_out_exit": net_cfg.K_out_exit,
-            "eps_exit_um": net_cfg.eps_exit_um,
-            "K_in_alias": args.K_in,
-            "K_out_alias": args.K_out,
-            "eps_um_alias": args.eps_um,
-            "profile_pressure_unit": args.profile_pressure_unit,
-            "pump_speed_m3s": case.pump_speed_m3s,
-            "V_ext": case.V_ext,
-            "P_ult_Pa": case.P_ult_Pa,
-        },
-        solver_settings={"method": "Radau", "rtol": "1e-7|1e-6", "atol": "1e-10|1e-8"},
-    )
+    run_params = {
+        "command": args.cmd,
+        "profile": args.profile,
+        "external_model": args.external_model,
+        "d_int": d_int,
+        "d_exit": d_exit,
+        "thermo": case.thermo,
+        "wall_model": case.wall_model,
+        "h": case.h_conv,
+        "duration": case.duration,
+        "npts": case.n_pts,
+        "cd_int": args.cd_int,
+        "cd_exit": args.cd_exit,
+        "int_model": args.int_model,
+        "exit_model": args.exit_model,
+        "L_int_mm": args.L_int_mm,
+        "L_exit_mm": args.L_exit_mm,
+        "K_in_int": net_cfg.K_in_int,
+        "K_out_int": net_cfg.K_out_int,
+        "eps_int_um": net_cfg.eps_int_um,
+        "K_in_exit": net_cfg.K_in_exit,
+        "K_out_exit": net_cfg.K_out_exit,
+        "eps_exit_um": net_cfg.eps_exit_um,
+        "K_in_alias": args.K_in,
+        "K_out_alias": args.K_out,
+        "eps_um_alias": args.eps_um,
+        "profile_pressure_unit": args.profile_pressure_unit,
+        "topology": args.topology,
+        "n_chain_b": args.n_chain_b,
+        "pump_speed_m3s": case.pump_speed_m3s,
+        "V_ext": case.V_ext,
+        "P_ult_Pa": case.P_ult_Pa,
+        "panel_preset": preset.to_dict(),
+    }
+    export_case_artifacts(out, name, res, run_params)
     if args.do_plots:
         plot_basic(out, name, res)
 
@@ -183,6 +154,12 @@ def _add_common_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--duration", type=float, default=150.0)
     s.add_argument("--npts", type=int, default=800)
     s.add_argument("--n-int", type=int, default=1)
+    s.add_argument(
+        "--topology",
+        choices=["single_chain", "two_chain_shared_vest"],
+        default="single_chain",
+    )
+    s.add_argument("--n-chain-b", type=int, default=10)
     s.add_argument("--n-exit", type=int, default=1)
     s.add_argument("--cd-int", type=float, default=0.62)
     s.add_argument("--cd-exit", type=float, default=0.62)
@@ -236,6 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--single", action="store_true")
     g.add_argument("--two", action="store_true")
 
+    sub.add_parser("gui")
+
     for name in ["sweep", "thermal", "sweep2d"]:
         s = sub.add_parser(name)
         _add_common_args(s)
@@ -260,6 +239,11 @@ def main() -> None:
             print(gate_single())
         if run_two:
             print(gate_two())
+        return
+    if args.cmd == "gui":
+        from .gui.main import main as gui_main
+
+        gui_main()
         return
     if args.cmd == "sweep":
         _run_one(args, args.d_int, args.d_exit)

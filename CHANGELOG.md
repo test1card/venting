@@ -1,5 +1,16 @@
 # Changelog
 
+## v10.0.0
+- Fixed Radau setup by removing invalid identity-only Jacobian sparsity hint.
+- Added scalar-or-list network parameter support and a new `two_chain_shared_vest` topology.
+- Updated GUI worker/progress handling and stop-check integration for true streaming callbacks.
+- Added regression tests for baseline gate behavior and topology/scalar-list compatibility.
+- Added desktop GUI (`python -m venting gui`) with optional dependencies (`.[gui]`) for configuring and running venting cases.
+- Added live plotting tabs for pressure, temperature, mass, peak diagnostics, and validity flags while solving in a background thread.
+- Added JSON save/load schema for GUI cases with explicit units and validation.
+- Added shared presets and run pipeline modules to keep CLI and GUI execution paths consistent.
+- Added streaming solver wrapper for progressive updates with regression tests against batch solve.
+
 ## v9.0.0
 - Added physically consistent short-tube thick-wall edge model with Darcy friction, minor losses, and iterative `Cd_eff` composition (lossy-nozzle, not Fanno).
 - Added split internal/exit short-tube loss parameters (`K_in_*`, `K_out_*`, `eps_*`) with backward-compatible alias CLI flags.

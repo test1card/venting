@@ -1,10 +1,10 @@
-# Venting v9.0.0 — 0D/Network model of depressurization (rigid volumes + compressible discharge)
+# Venting v10.0.0 — 0D/Network model of depressurization (rigid volumes + compressible discharge)
 
 Этот репозиторий моделирует стравливание (depressurization / venting) системы жёстких объёмов газа, соединённых отверстиями/каналами, когда внешнее давление падает по заданному профилю `P_ext(t)` (`linear`, `step`, `barometric`, `table` из CSV).
 
 Главный инженерный вопрос: какой максимальный перепад давления `|ΔP|` возникает на каждом «узком месте» (выход наружу, межузловые интерфейсы), и в каком режиме течёт газ (choked/subsonic).
 
-**Политика версий:** в runtime активна только **v9.0.0**. Старый монолитный скрипт хранится только в `archive/` как архивный референс.
+**Политика версий:** в runtime активна только **v10.0.0**. Старый монолитный скрипт хранится только в `archive/` как архивный референс.
 
 ---
 
@@ -57,7 +57,7 @@ $$
 P_i V_i = m_i R T_i
 $$
 
-В v9.0.0 интегрируются `m` (и `T` в thermal-варианте), а давление вычисляется через EOS.
+В v10.0.0 интегрируются `m` (и `T` в thermal-варианте), а давление вычисляется через EOS.
 
 ---
 
@@ -110,7 +110,7 @@ $$
 
 ---
 
-## 6) Архитектура кода (активная v9.0.0)
+## 6) Архитектура кода (активная v10.0.0)
 
 Пакет: `src/venting/`
 
@@ -228,7 +228,7 @@ results/<timestamp>_<case>/
 
 ## 11) Limitations & red flags
 
-Дополнительно для short-tube: это **lossy-nozzle** через эффективный `Cd_eff`; Fanno/friction-choking в v9.0.0 не реализован.
+Дополнительно для short-tube: это **lossy-nozzle** через эффективный `Cd_eff`; Fanno/friction-choking в v10.0.0 не реализован.
 
 
 
@@ -250,3 +250,31 @@ results/<timestamp>_<case>/
 ## License
 
 MIT (см. `LICENSE`).
+
+
+## GUI
+
+V10 adds an optional desktop GUI (thin client over the same core physics modules).
+
+Install GUI extras:
+
+```bash
+pip install -e ".[gui]"
+```
+
+Run GUI:
+
+```bash
+python -m venting gui
+```
+
+What GUI supports:
+- orifice vs short_tube for internal/exit edges (L, eps, K_in/K_out),
+- network and geometry controls (`N_chain`, `N_par`, volumes, wall areas, diameters/counts, Cd),
+- external model (`profile` / `dynamic_pump`),
+- thermo (`isothermal` / `intermediate` / `variable`) and wall model (`fixed` / `lumped`),
+- background solve with live plot updates, stop button, validity table,
+- case JSON save/load (explicit units),
+- artifact export compatible with CLI (`npz`, `meta.json`, `*_validity.json`, `summary.csv`).
+
+Packaging executable for a target OS is left as TODO until `{TARGET_OS}` and `{PACKAGING_TOOL}` are specified.

@@ -2,7 +2,6 @@ import math
 
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.sparse import lil_matrix
 
 from .cases import CaseConfig
 from .constants import C_CHOKED, C_P, C_V, M_SAFE, P0, R_GAS, T0, T_SAFE
@@ -392,10 +391,6 @@ def solve_case(
 
     t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
 
-    jac = lil_matrix((n_vars, n_vars))
-    for i in range(n_vars):
-        jac[i, i] = 1
-
     profile = bcs_local[0].profile if bcs_local else None
 
     def p_from_state(y: np.ndarray) -> np.ndarray:
@@ -484,9 +479,201 @@ def solve_case(
         rtol=1e-7 if case.thermo == "isothermal" else 1e-6,
         atol=1e-10 if case.thermo == "isothermal" else 1e-8,
         max_step=max_step,
-        jac_sparsity=jac,
         events=events,
     )
+    sol.ext_idx = ext_idx
+    sol.node_count = len(nodes_local)
+    sol.nodes_local = nodes_local
+    sol.edges_local = edges_local
+    sol.bcs_local = bcs_local
+    return sol
+
+
+def solve_case_stream(
+    nodes: list[GasNode],
+    edges: list,
+    bcs: list[ExternalBC],
+    case: CaseConfig,
+    callback=None,
+    n_chunks: int = 20,
+    stop_check=None,
+):
+    """True streaming solve via piecewise integration segments."""
+    if callback is None and stop_check is None:
+        return solve_case(nodes, edges, bcs, case)
+    nodes_local = list(nodes)
+    edges_local = list(edges)
+    bcs_local = list(bcs)
+    ext_idx = None
+
+    if case.external_model == "dynamic_pump":
+        ext_idx = len(nodes_local)
+        nodes_local.append(GasNode("external", case.V_ext, 0.0))
+        rewired = []
+        for e in edges_local:
+            if isinstance(e, OrificeEdge) and e.b == EXT_NODE:
+                rewired.append(
+                    OrificeEdge(e.a, ext_idx, e.A_total, e.Cd_model, label=e.label)
+                )
+            elif isinstance(e, ShortTubeEdge) and e.b == EXT_NODE:
+                rewired.append(
+                    ShortTubeEdge(
+                        e.a,
+                        ext_idx,
+                        e.A_total,
+                        e.D,
+                        e.L,
+                        e.eps,
+                        e.K_in,
+                        e.K_out,
+                        e.Cd_model,
+                        label=e.label,
+                    )
+                )
+            else:
+                rewired.append(e)
+        edges_local = rewired
+        bcs_local = []
+
+    N = len(nodes_local)
+    V = np.array([n.V for n in nodes_local], dtype=float)
+    rhs_core, _ = build_rhs(nodes_local, edges_local, bcs_local, case)
+
+    m0 = P0 * V / (R_GAS * T0)
+    if ext_idx is not None:
+        m0[ext_idx] = max(case.P_ult_Pa, 10.0) * V[ext_idx] / (R_GAS * case.T_ext)
+
+    if case.thermo == "isothermal":
+        y = m0.copy()
+    else:
+        T_init = np.full(N, T0)
+        if ext_idx is not None:
+            T_init[ext_idx] = case.T_ext
+        y = np.concatenate([m0, T_init])
+        if case.wall_model == "lumped":
+            y = np.concatenate([y, np.full(N, case.T_wall)])
+
+    t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
+
+    def p_from_state(y_state: np.ndarray) -> np.ndarray:
+        m = y_state[:N]
+        if case.thermo == "isothermal":
+            T = np.full(N, T0)
+            if ext_idx is not None:
+                T[ext_idx] = case.T_ext
+        else:
+            T = np.maximum(y_state[N : 2 * N], T_SAFE)
+            if ext_idx is not None:
+                T[ext_idx] = case.T_ext
+        return np.maximum(m, 0.0) * R_GAS * T / V
+
+    def rhs(t: float, y_state: np.ndarray) -> np.ndarray:
+        dy = rhs_core(t, y_state)
+        if ext_idx is not None:
+            P = p_from_state(y_state)
+            mdot_pump = (
+                case.pump_speed_m3s
+                * max(P[ext_idx] - case.P_ult_Pa, 0.0)
+                / (R_GAS * max(case.T_ext, T_SAFE))
+            )
+            dy[ext_idx] -= mdot_pump
+            if case.thermo != "isothermal":
+                dy[N + ext_idx] = 0.0
+        return dy
+
+    A_max = 0.0
+    Cd_max = 0.0
+    for e in edges_local:
+        if isinstance(e, (OrificeEdge, ShortTubeEdge)):
+            A_max = max(A_max, e.A_total)
+            Cd_max = max(Cd_max, e.Cd_model())
+    V_min = float(np.min(V))
+    mdot_ch = (
+        Cd_max * A_max * C_CHOKED * P0 / math.sqrt(R_GAS * T0) if A_max > 0 else 0.0
+    )
+    tau_min = (V_min * P0) / (R_GAS * T0 * mdot_ch) if mdot_ch > 0 else 1.0
+    max_step = max(min(case.duration / 2000.0, tau_min / 10.0), 1e-4)
+
+    n_chunks = max(int(n_chunks), 1)
+    bounds = np.linspace(0.0, case.duration, n_chunks + 1)
+    t_out = []
+    y_out = []
+    success = True
+    message = "stream completed"
+
+    for i in range(n_chunks):
+        if stop_check is not None and stop_check():
+            success = False
+            message = "stream cancelled"
+            break
+        t0 = bounds[i]
+        t1 = bounds[i + 1]
+        mask = (t_eval >= t0) & (t_eval <= t1)
+        t_seg = t_eval[mask]
+        if t_seg.size == 0:
+            t_seg = np.array([t0, t1])
+        sol_seg = solve_ivp(
+            rhs,
+            (float(t0), float(t1)),
+            y,
+            method="Radau",
+            t_eval=t_seg,
+            rtol=1e-7 if case.thermo == "isothermal" else 1e-6,
+            atol=1e-10 if case.thermo == "isothermal" else 1e-8,
+            max_step=max_step,
+        )
+        if not sol_seg.success:
+            success = False
+            message = str(sol_seg.message)
+            break
+
+        seg_t = sol_seg.t
+        seg_y = sol_seg.y
+        if i > 0 and seg_t.size > 0:
+            seg_t = seg_t[1:]
+            seg_y = seg_y[:, 1:]
+        if seg_t.size > 0:
+            t_out.append(seg_t)
+            y_out.append(seg_y)
+        y = sol_seg.y[:, -1]
+
+        if callback is not None and t_out:
+            t_cat = np.concatenate(t_out)
+            y_cat = np.concatenate(y_out, axis=1)
+            callback(
+                {
+                    "t": t_cat,
+                    "y": y_cat,
+                    "progress": float((i + 1) / n_chunks),
+                    "done": bool(i == n_chunks - 1),
+                    "n_nodes": N,
+                    "thermo": case.thermo,
+                    "wall_model": case.wall_model,
+                }
+            )
+
+    if t_out:
+        t_final = np.concatenate(t_out)
+        y_final = np.concatenate(y_out, axis=1)
+    else:
+        t_final = np.array([0.0])
+        y_final = y[:, None]
+
+    if t_final.size != t_eval.size or not np.allclose(t_final, t_eval):
+        y_interp = np.empty((y_final.shape[0], t_eval.size), dtype=float)
+        for i_row in range(y_final.shape[0]):
+            y_interp[i_row] = np.interp(t_eval, t_final, y_final[i_row])
+        t_final = t_eval
+        y_final = y_interp
+
+    class _Sol:
+        pass
+
+    sol = _Sol()
+    sol.t = t_final
+    sol.y = y_final
+    sol.success = success
+    sol.message = message
     sol.ext_idx = ext_idx
     sol.node_count = len(nodes_local)
     sol.nodes_local = nodes_local

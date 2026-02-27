@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "venting"
-version = "9.0.0"
-description = "v9.0.0 edge-based 0D venting solver"
+version = "10.0.0"
+description = "v10.0.0 edge-based 0D venting solver"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -24,6 +24,10 @@ dev = [
   "black>=24,<26",
   "mypy>=1.8,<2",
   "pre-commit>=3.6,<4",
+]
+gui = [
+  "PySide6>=6.6",
+  "pyqtgraph>=0.13",
 ]
 
 [tool.setuptools]
