@@ -4,8 +4,13 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from .cases import CaseConfig
-from .constants import C_CHOKED, C_P, C_V, M_SAFE, P0, R_GAS, T0, T_SAFE
-from .flow import mdot_orifice_pos_props, mdot_short_tube_pos, mdot_slot_pos
+from .constants import C_CHOKED, C_P, C_V, GAMMA, M_SAFE, P0, R_GAS, T0, T_SAFE
+from .flow import (
+    mdot_fanno_tube,
+    mdot_orifice_pos_props,
+    mdot_short_tube_pos,
+    mdot_slot_pos,
+)
 from .graph import (
     EXT_NODE,
     ExternalBC,
@@ -17,6 +22,43 @@ from .graph import (
 from .thermo import cp_air, cv_air, gamma_air, h_air, u_air
 
 SIGMA_SB = 5.670374419e-8
+
+
+def _mdot_short_edge(
+    edge: ShortTubeEdge,
+    p_up: float,
+    t_up: float,
+    p_dn: float,
+    cd0: float,
+    gamma: float = GAMMA,
+):
+    if edge.fanno:
+        return mdot_fanno_tube(
+            p_up,
+            t_up,
+            p_dn,
+            cd0,
+            edge.A_total,
+            edge.D,
+            edge.L,
+            edge.eps,
+            edge.K_in,
+            edge.K_out,
+            gamma=gamma,
+        )
+    return mdot_short_tube_pos(
+        p_up,
+        t_up,
+        p_dn,
+        cd0,
+        edge.A_total,
+        edge.D,
+        edge.L,
+        edge.eps,
+        edge.K_in,
+        edge.K_out,
+        gamma=gamma,
+    )
 
 
 def _property_model(thermo: str):
@@ -65,18 +107,7 @@ def build_rhs(
                                     P[a], T[a], pext, cd0, e.A_total
                                 )
                             else:
-                                md = mdot_short_tube_pos(
-                                    P[a],
-                                    T[a],
-                                    pext,
-                                    cd0,
-                                    e.A_total,
-                                    e.D,
-                                    e.L,
-                                    e.eps,
-                                    e.K_in,
-                                    e.K_out,
-                                )
+                                md = _mdot_short_edge(e, P[a], T[a], pext, cd0)
                             dm[a] -= md
                         else:
                             if isinstance(e, OrificeEdge):
@@ -84,18 +115,7 @@ def build_rhs(
                                     pext, bc.T_ext, P[a], cd0, e.A_total
                                 )
                             else:
-                                md = mdot_short_tube_pos(
-                                    pext,
-                                    bc.T_ext,
-                                    P[a],
-                                    cd0,
-                                    e.A_total,
-                                    e.D,
-                                    e.L,
-                                    e.eps,
-                                    e.K_in,
-                                    e.K_out,
-                                )
+                                md = _mdot_short_edge(e, pext, bc.T_ext, P[a], cd0)
                             dm[a] += md
                     else:
                         Pa, Pb = P[a], P[b]
@@ -105,18 +125,7 @@ def build_rhs(
                                     Pa, T[a], Pb, cd0, e.A_total
                                 )
                             else:
-                                md = mdot_short_tube_pos(
-                                    Pa,
-                                    T[a],
-                                    Pb,
-                                    cd0,
-                                    e.A_total,
-                                    e.D,
-                                    e.L,
-                                    e.eps,
-                                    e.K_in,
-                                    e.K_out,
-                                )
+                                md = _mdot_short_edge(e, Pa, T[a], Pb, cd0)
                             dm[a] -= md
                             dm[b] += md
                         else:
@@ -125,18 +134,7 @@ def build_rhs(
                                     Pb, T[b], Pa, cd0, e.A_total
                                 )
                             else:
-                                md = mdot_short_tube_pos(
-                                    Pb,
-                                    T[b],
-                                    Pa,
-                                    cd0,
-                                    e.A_total,
-                                    e.D,
-                                    e.L,
-                                    e.eps,
-                                    e.K_in,
-                                    e.K_out,
-                                )
+                                md = _mdot_short_edge(e, Pb, T[b], Pa, cd0)
                             dm[b] -= md
                             dm[a] += md
                 elif isinstance(e, SlotChannelEdge):
@@ -188,18 +186,8 @@ def build_rhs(
                                 P[a], T_eff[a], pext, cd0, e.A_total, gamma=gamma_up
                             )
                         else:
-                            md = mdot_short_tube_pos(
-                                P[a],
-                                T_eff[a],
-                                pext,
-                                cd0,
-                                e.A_total,
-                                e.D,
-                                e.L,
-                                e.eps,
-                                e.K_in,
-                                e.K_out,
-                                gamma=gamma_up,
+                            md = _mdot_short_edge(
+                                e, P[a], T_eff[a], pext, cd0, gamma=gamma_up
                             )
                         dm[a] -= md
                         dE[a] += -md * h_fn(float(T_eff[a]))
@@ -215,17 +203,12 @@ def build_rhs(
                                 gamma=gamma_up,
                             )
                         else:
-                            md = mdot_short_tube_pos(
+                            md = _mdot_short_edge(
+                                e,
                                 pext,
                                 max(bc.T_ext, T_SAFE),
                                 P[a],
                                 cd0,
-                                e.A_total,
-                                e.D,
-                                e.L,
-                                e.eps,
-                                e.K_in,
-                                e.K_out,
                                 gamma=gamma_up,
                             )
                         dm[a] += md
@@ -239,18 +222,8 @@ def build_rhs(
                                 Pa, T_eff[a], Pb, cd0, e.A_total, gamma=gamma_up
                             )
                         else:
-                            md = mdot_short_tube_pos(
-                                Pa,
-                                T_eff[a],
-                                Pb,
-                                cd0,
-                                e.A_total,
-                                e.D,
-                                e.L,
-                                e.eps,
-                                e.K_in,
-                                e.K_out,
-                                gamma=gamma_up,
+                            md = _mdot_short_edge(
+                                e, Pa, T_eff[a], Pb, cd0, gamma=gamma_up
                             )
                         dm[a] -= md
                         dm[b] += md
@@ -263,18 +236,8 @@ def build_rhs(
                                 Pb, T_eff[b], Pa, cd0, e.A_total, gamma=gamma_up
                             )
                         else:
-                            md = mdot_short_tube_pos(
-                                Pb,
-                                T_eff[b],
-                                Pa,
-                                cd0,
-                                e.A_total,
-                                e.D,
-                                e.L,
-                                e.eps,
-                                e.K_in,
-                                e.K_out,
-                                gamma=gamma_up,
+                            md = _mdot_short_edge(
+                                e, Pb, T_eff[b], Pa, cd0, gamma=gamma_up
                             )
                         dm[b] -= md
                         dm[a] += md
@@ -364,6 +327,7 @@ def solve_case(
                         e.K_out,
                         e.Cd_model,
                         label=e.label,
+                        fanno=e.fanno,
                     )
                 )
             else:
@@ -495,7 +459,8 @@ def solve_case_stream(
     bcs: list[ExternalBC],
     case: CaseConfig,
     callback=None,
-    n_chunks: int = 20,
+    n_chunks: int | None = None,
+    dt_chunk_s: float = 2.0,
     should_stop=None,
     stop_check=None,
 ):
@@ -531,6 +496,7 @@ def solve_case_stream(
                         e.K_out,
                         e.Cd_model,
                         label=e.label,
+                        fanno=e.fanno,
                     )
                 )
             else:
@@ -597,14 +563,19 @@ def solve_case_stream(
     tau_min = (V_min * P0) / (R_GAS * T0 * mdot_ch) if mdot_ch > 0 else 1.0
     max_step = max(min(case.duration / 2000.0, tau_min / 10.0), 1e-4)
 
-    n_chunks = max(int(n_chunks), 1)
-    bounds = np.linspace(0.0, case.duration, n_chunks + 1)
+    if n_chunks is not None:
+        effective_n_chunks = max(int(n_chunks), 1)
+    else:
+        effective_n_chunks = max(
+            int(math.ceil(case.duration / max(dt_chunk_s, 1e-6))), 1
+        )
+    bounds = np.linspace(0.0, case.duration, effective_n_chunks + 1)
     t_out = []
     y_out = []
     success = True
     message = "stream completed"
 
-    for i in range(n_chunks):
+    for i in range(effective_n_chunks):
         if should_stop is not None and should_stop():
             success = False
             message = "stream cancelled"
@@ -647,8 +618,8 @@ def solve_case_stream(
                 {
                     "t": t_cat,
                     "y": y_cat,
-                    "progress": float((i + 1) / n_chunks),
-                    "done": bool(i == n_chunks - 1),
+                    "progress": float((i + 1) / effective_n_chunks),
+                    "done": bool(i == effective_n_chunks - 1),
                     "node_count": N,
                     "n_nodes": N,
                     "thermo": case.thermo,

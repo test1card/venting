@@ -279,3 +279,5 @@ What GUI supports:
 - GUI progress uses chunked integration when streaming is enabled; tiny differences vs batch solve can appear within integrator tolerances.
 
 Packaging executable for a target OS is left as TODO until `{TARGET_OS}` and `{PACKAGING_TOOL}` are specified.
+
+GUI streaming uses chunked integration for progress updates; results can differ slightly from a single batch solve within integrator tolerances.

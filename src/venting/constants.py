@@ -5,6 +5,12 @@ R_GAS = 287.05
 C_V = R_GAS / (GAMMA - 1.0)
 C_P = GAMMA * C_V
 
+# Boltzmann constant [J/K], exact SI (2019 redefinition)
+K_BOLTZMANN = 1.380649e-23
+# Effective collision diameter for dry air molecules [m]
+# Source: Jennings 1988, J. Aerosol Sci. 19(2):159-166
+D_MOL_AIR = 3.65e-10
+
 T0 = 300.0
 P0 = 101325.0
 

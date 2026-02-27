@@ -76,7 +76,7 @@ def create_main_window():
                     bcs,
                     case,
                     callback=on_chunk,
-                    n_chunks=20,
+                    dt_chunk_s=1.0,
                     should_stop=lambda: self.stop_requested,
                 )
                 if self.stop_requested or not sol.success:
@@ -151,8 +151,12 @@ def create_main_window():
                 form.addRow(key, w)
 
             # required controls
-            add_combo("int_model", ["orifice", "short_tube"], self.cfg.int_model)
-            add_combo("exit_model", ["orifice", "short_tube"], self.cfg.exit_model)
+            add_combo(
+                "int_model", ["orifice", "short_tube", "fanno"], self.cfg.int_model
+            )
+            add_combo(
+                "exit_model", ["orifice", "short_tube", "fanno"], self.cfg.exit_model
+            )
             add_line("L_int_mm", self.cfg.L_int_mm)
             add_line("L_exit_mm", self.cfg.L_exit_mm)
             add_line("eps_int_um", self.cfg.eps_int_um)

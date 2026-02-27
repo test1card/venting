@@ -9,7 +9,7 @@ from venting.cases import CaseConfig, NetworkConfig
 ALLOWED_THERMO = {"isothermal", "intermediate", "variable"}
 ALLOWED_WALL = {"fixed", "lumped"}
 ALLOWED_EXTERNAL = {"profile", "dynamic_pump"}
-ALLOWED_EDGE_MODEL = {"orifice", "short_tube"}
+ALLOWED_EDGE_MODEL = {"orifice", "short_tube", "fanno"}
 ALLOWED_PROFILE = {"linear", "step", "barometric", "table"}
 
 
@@ -85,7 +85,7 @@ class GuiCaseConfig:
             self.int_model not in ALLOWED_EDGE_MODEL
             or self.exit_model not in ALLOWED_EDGE_MODEL
         ):
-            raise ValueError("edge model must be orifice|short_tube")
+            raise ValueError("edge model must be orifice|short_tube|fanno")
         if self.profile_kind not in ALLOWED_PROFILE:
             raise ValueError("profile_kind is invalid")
         for name in [
