@@ -11,7 +11,14 @@ from .diagnostics import summarize_result
 from .gates import gate_single, gate_two
 from .geometry import mm2_to_m2, mm3_to_m3
 from .graph import build_branching_network
-from .io import dump_meta_json, make_results_dir, write_run_json, write_summary_csv
+from .io import (
+    dump_meta_json,
+    make_results_dir,
+    print_validity_summary,
+    write_run_json,
+    write_summary_csv,
+    write_validity_json,
+)
 from .plotting import plot_basic
 from .profiles import (
     make_profile_exponential,
@@ -23,6 +30,8 @@ from .solver import solve_case
 
 
 def _profile(args):
+    if args.external_model == "dynamic_pump":
+        return make_profile_step(P0, 1e9)
     if args.profile == "linear":
         return make_profile_linear(P0, args.rate_mmhg)
     if args.profile == "step":
@@ -61,9 +70,15 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         exit_model=args.exit_model,
         L_int_mm=args.L_int_mm,
         L_exit_mm=args.L_exit_mm,
-        eps_um=args.eps_um,
         K_in=args.K_in,
         K_out=args.K_out,
+        eps_um=args.eps_um,
+        K_in_int=args.K_in_int,
+        K_out_int=args.K_out_int,
+        eps_int_um=args.eps_int_um,
+        K_in_exit=args.K_in_exit,
+        K_out_exit=args.K_out_exit,
+        eps_exit_um=args.eps_exit_um,
     )
     case = CaseConfig(
         thermo=args.thermo,
@@ -73,15 +88,28 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         n_pts=args.npts,
         p_stop=P_STOP,
         p_rms_tol=1.0,
+        wall_model=args.wall_model,
+        wall_C_per_area=args.wall_C_per_area,
+        wall_h_out=args.wall_h_out,
+        wall_T_inf=args.wall_T_inf,
+        wall_emissivity=args.wall_emissivity,
+        wall_T_sur=args.wall_T_sur,
+        wall_q_flux=args.wall_q_flux,
+        external_model=args.external_model,
+        V_ext=args.V_ext,
+        T_ext=args.T_ext,
+        pump_speed_m3s=args.pump_speed_m3s,
+        P_ult_Pa=args.P_ult_Pa,
     )
+
     nodes, edges, bcs = build_branching_network(net_cfg, prof)
     sol = solve_case(nodes, edges, bcs, case)
     res = summarize_result(nodes, edges, bcs, case, sol)
 
     out = make_results_dir(args.cmd)
     name = (
-        f"v85_{prof.name}_{case.thermo}_dint{d_int:g}_"
-        f"dexit{d_exit:g}_h{case.h_conv:g}"
+        f"v900_{args.external_model}_{prof.name}_{case.thermo}_"
+        f"dint{d_int:g}_dexit{d_exit:g}_h{case.h_conv:g}"
     )
     np.savez_compressed(
         out / f"{name}.npz",
@@ -93,15 +121,19 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         tau_exit=res.tau_exit,
     )
     dump_meta_json(out, f"{name}_meta.json", res.meta)
+    write_validity_json(out, name, res.meta.get("validity_flags", {}))
+    print_validity_summary(res.meta.get("validity_flags", {}))
     write_summary_csv(out, res)
     write_run_json(
         out,
         params={
             "command": args.cmd,
             "profile": args.profile,
+            "external_model": args.external_model,
             "d_int": d_int,
             "d_exit": d_exit,
             "thermo": case.thermo,
+            "wall_model": case.wall_model,
             "h": case.h_conv,
             "duration": case.duration,
             "npts": case.n_pts,
@@ -111,15 +143,89 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
             "exit_model": args.exit_model,
             "L_int_mm": args.L_int_mm,
             "L_exit_mm": args.L_exit_mm,
-            "eps_um": args.eps_um,
-            "K_in": args.K_in,
-            "K_out": args.K_out,
+            "K_in_int": net_cfg.K_in_int,
+            "K_out_int": net_cfg.K_out_int,
+            "eps_int_um": net_cfg.eps_int_um,
+            "K_in_exit": net_cfg.K_in_exit,
+            "K_out_exit": net_cfg.K_out_exit,
+            "eps_exit_um": net_cfg.eps_exit_um,
+            "K_in_alias": args.K_in,
+            "K_out_alias": args.K_out,
+            "eps_um_alias": args.eps_um,
             "profile_pressure_unit": args.profile_pressure_unit,
+            "pump_speed_m3s": case.pump_speed_m3s,
+            "V_ext": case.V_ext,
+            "P_ult_Pa": case.P_ult_Pa,
         },
         solver_settings={"method": "Radau", "rtol": "1e-7|1e-6", "atol": "1e-10|1e-8"},
     )
     if args.do_plots:
         plot_basic(out, name, res)
+
+
+def _add_common_args(s: argparse.ArgumentParser) -> None:
+    s.add_argument(
+        "--profile", default="linear", choices=["linear", "step", "barometric", "table"]
+    )
+    s.add_argument(
+        "--external-model", default="profile", choices=["profile", "dynamic_pump"]
+    )
+    s.add_argument("--profile-file", default="")
+    s.add_argument("--profile-pressure-unit", default="Pa", choices=["Pa", "mmHg"])
+    s.add_argument("--rate-mmhg", type=float, default=20.0)
+    s.add_argument("--step-time", type=float, default=0.01)
+    s.add_argument(
+        "--thermo",
+        default="isothermal",
+        choices=["isothermal", "intermediate", "variable"],
+    )
+    s.add_argument("--h", type=float, default=0.0)
+    s.add_argument("--duration", type=float, default=150.0)
+    s.add_argument("--npts", type=int, default=800)
+    s.add_argument("--n-int", type=int, default=1)
+    s.add_argument("--n-exit", type=int, default=1)
+    s.add_argument("--cd-int", type=float, default=0.62)
+    s.add_argument("--cd-exit", type=float, default=0.62)
+    s.add_argument("--int-model", choices=["orifice", "short_tube"], default="orifice")
+    s.add_argument("--exit-model", choices=["orifice", "short_tube"], default="orifice")
+    s.add_argument("--L-int-mm", type=float, default=0.0)
+    s.add_argument("--L-exit-mm", type=float, default=0.0)
+    s.add_argument("--K-in-int", type=float, default=None)
+    s.add_argument("--K-out-int", type=float, default=None)
+    s.add_argument("--eps-int-um", type=float, default=None)
+    s.add_argument("--K-in-exit", type=float, default=None)
+    s.add_argument("--K-out-exit", type=float, default=None)
+    s.add_argument("--eps-exit-um", type=float, default=None)
+    s.add_argument(
+        "--K-in",
+        type=float,
+        default=0.5,
+        help="Deprecated alias for both internal/exit K_in",
+    )
+    s.add_argument(
+        "--K-out",
+        type=float,
+        default=1.0,
+        help="Deprecated alias for both internal/exit K_out",
+    )
+    s.add_argument(
+        "--eps-um",
+        type=float,
+        default=0.0,
+        help="Deprecated alias for both internal/exit roughness",
+    )
+    s.add_argument("--wall-model", choices=["fixed", "lumped"], default="fixed")
+    s.add_argument("--wall-C-per-area", type=float, default=1e9)
+    s.add_argument("--wall-h-out", type=float, default=0.0)
+    s.add_argument("--wall-T-inf", type=float, default=T0)
+    s.add_argument("--wall-emissivity", type=float, default=0.0)
+    s.add_argument("--wall-T-sur", type=float, default=T0)
+    s.add_argument("--wall-q-flux", type=float, default=0.0)
+    s.add_argument("--V-ext", type=float, default=0.1)
+    s.add_argument("--T-ext", type=float, default=T0)
+    s.add_argument("--pump-speed-m3s", type=float, default=0.0)
+    s.add_argument("--P-ult-Pa", type=float, default=0.0)
+    s.add_argument("--do-plots", action="store_true")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,42 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for name in ["sweep", "thermal", "sweep2d"]:
         s = sub.add_parser(name)
-        s.add_argument(
-            "--profile",
-            default="linear",
-            choices=["linear", "step", "barometric", "table"],
-        )
-        s.add_argument("--profile-file", default="")
-        s.add_argument(
-            "--profile-pressure-unit",
-            default="Pa",
-            choices=["Pa", "mmHg"],
-            help="Unit for table profile pressure column",
-        )
-        s.add_argument("--rate-mmhg", type=float, default=20.0)
-        s.add_argument("--step-time", type=float, default=0.01)
-        s.add_argument(
-            "--thermo", default="isothermal", choices=["isothermal", "intermediate"]
-        )
-        s.add_argument("--h", type=float, default=0.0)
-        s.add_argument("--duration", type=float, default=150.0)
-        s.add_argument("--npts", type=int, default=800)
-        s.add_argument("--n-int", type=int, default=1)
-        s.add_argument("--n-exit", type=int, default=1)
-        s.add_argument("--cd-int", type=float, default=0.62)
-        s.add_argument("--cd-exit", type=float, default=0.62)
-        s.add_argument(
-            "--int-model", choices=["orifice", "short_tube"], default="orifice"
-        )
-        s.add_argument(
-            "--exit-model", choices=["orifice", "short_tube"], default="orifice"
-        )
-        s.add_argument("--L-int-mm", type=float, default=0.0)
-        s.add_argument("--L-exit-mm", type=float, default=0.0)
-        s.add_argument("--eps-um", type=float, default=0.0)
-        s.add_argument("--K-in", type=float, default=0.5)
-        s.add_argument("--K-out", type=float, default=1.0)
-        s.add_argument("--do-plots", action="store_true")
+        _add_common_args(s)
 
     sub.choices["sweep"].add_argument("--d-int", type=float, default=2.0)
     sub.choices["sweep"].add_argument("--d-exit", type=float, default=2.0)

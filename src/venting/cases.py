@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .constants import P_STOP
+from .constants import P_STOP, T0
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,18 @@ class CaseConfig:
     p_stop: float = P_STOP
     p_rms_tol: float = 1.0
     l_char_m: float = 0.1
+    wall_model: str = "fixed"  # fixed|lumped
+    wall_C_per_area: float = 1e9
+    wall_h_out: float = 0.0
+    wall_T_inf: float = T0
+    wall_emissivity: float = 0.0
+    wall_T_sur: float = T0
+    wall_q_flux: float = 0.0
+    external_model: str = "profile"  # profile|dynamic_pump
+    V_ext: float = 0.1
+    T_ext: float = T0
+    pump_speed_m3s: float = 0.0
+    P_ult_Pa: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -38,6 +50,12 @@ class NetworkConfig:
     eps_um: float = 0.0
     K_in: float = 0.5
     K_out: float = 1.0
+    K_in_int: float | None = None
+    K_out_int: float | None = None
+    eps_int_um: float | None = None
+    K_in_exit: float | None = None
+    K_out_exit: float | None = None
+    eps_exit_um: float | None = None
     use_gap: bool = False
     V_gap: float = 0.0
     A_wall_gap: float = 0.0

@@ -1,10 +1,10 @@
-# Venting v8.5 — 0D/Network model of depressurization (rigid volumes + compressible discharge)
+# Venting v9.0.0 — 0D/Network model of depressurization (rigid volumes + compressible discharge)
 
 Этот репозиторий моделирует стравливание (depressurization / venting) системы жёстких объёмов газа, соединённых отверстиями/каналами, когда внешнее давление падает по заданному профилю `P_ext(t)` (`linear`, `step`, `barometric`, `table` из CSV).
 
 Главный инженерный вопрос: какой максимальный перепад давления `|ΔP|` возникает на каждом «узком месте» (выход наружу, межузловые интерфейсы), и в каком режиме течёт газ (choked/subsonic).
 
-**Политика версий:** в runtime активна только **v8.5**. Старый монолитный скрипт хранится только в `archive/` как архивный референс.
+**Политика версий:** в runtime активна только **v9.0.0**. Старый монолитный скрипт хранится только в `archive/` как архивный референс.
 
 ---
 
@@ -57,7 +57,7 @@ $$
 P_i V_i = m_i R T_i
 $$
 
-В v8.5 интегрируются `m` (и `T` в thermal-варианте), а давление вычисляется через EOS.
+В v9.0.0 интегрируются `m` (и `T` в thermal-варианте), а давление вычисляется через EOS.
 
 ---
 
@@ -110,7 +110,7 @@ $$
 
 ---
 
-## 6) Архитектура кода (активная v8.5)
+## 6) Архитектура кода (активная v9.0.0)
 
 Пакет: `src/venting/`
 
@@ -195,7 +195,7 @@ python -m venting gate
 python -m venting sweep --profile linear --d-int 2 --d-exit 2 --cd-int 0.62 --cd-exit 0.62
 python -m venting thermal --profile linear --d 2 --h-list 0,1,5,15
 python -m venting sweep2d --profile linear --d-int-list 1.5,2.0 --d-exit-list 1.5,2.0
-python -m venting sweep --profile linear --d-int 2 --d-exit 4 --int-model short_tube --L-int-mm 1 --exit-model short_tube --L-exit-mm 1 --eps-um 0 --K-in 0.5 --K-out 1.0 --cd-int 0.62 --cd-exit 0.62 --thermo intermediate --h 0
+python -m venting sweep --profile linear --d-int 2 --d-exit 4 --int-model short_tube --L-int-mm 1 --exit-model short_tube --L-exit-mm 1 --K-in-int 0.5 --K-out-int 1.0 --eps-int-um 0 --K-in-exit 0.5 --K-out-exit 1.0 --eps-exit-um 0 --cd-int 0.62 --cd-exit 0.62 --thermo variable --wall-model lumped --external-model dynamic_pump --pump-speed-m3s 0.01 --V-ext 0.2 --P-ult-Pa 10
 ```
 
 Профиль `table` ожидает CSV с колонками `t_s,P_Pa` через `--profile-file`.
@@ -228,6 +228,10 @@ results/<timestamp>_<case>/
 
 ## 11) Limitations & red flags
 
+Дополнительно для short-tube: это **lossy-nozzle** через эффективный `Cd_eff`; Fanno/friction-choking в v9.0.0 не реализован.
+
+
+
 - Это **не** CFD и не замена стендовым испытаниям.
 - `C_d` — главный источник неопределённости → обязательно делать sweep по `C_d`/геометрии.
 - Изотермический случай не «всегда консервативен» для любой метрики и любого момента времени.
@@ -239,7 +243,7 @@ results/<timestamp>_<case>/
 
 - `docs/model_v85.md` — краткая модель.
 - `docs/verification_v85.md` — верификация и критерии.
-- `docs/assumptions_v85.md` — допущения и ограничения.
+- `docs/assumptions_v9.md` — допущения и ограничения.
 - `CONTRIBUTING.md` — вклад в проект.
 - `CHANGELOG.md` — история изменений.
 

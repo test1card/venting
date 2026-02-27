@@ -1,6 +1,6 @@
 import math
 
-from .constants import C_CHOKED, GAMMA, PI_C, R_GAS, T_SAFE
+from .constants import GAMMA, R_GAS, T_SAFE
 
 
 def mu_air_sutherland(T: float) -> float:
@@ -11,8 +11,14 @@ def mu_air_sutherland(T: float) -> float:
     return mu0 * (t_eff / t_ref) ** 1.5 * (t_ref + s) / (t_eff + s)
 
 
-def mdot_orifice_pos(
-    P_up: float, T_up: float, P_dn: float, Cd: float, A: float
+def mdot_orifice_pos_props(
+    P_up: float,
+    T_up: float,
+    P_dn: float,
+    Cd: float,
+    A: float,
+    gamma: float = GAMMA,
+    r_gas: float = R_GAS,
 ) -> float:
     if P_up <= 0.0 or A <= 0.0:
         return 0.0
@@ -20,17 +26,30 @@ def mdot_orifice_pos(
     r = max(P_dn, 0.0) / P_up
     if r >= 1.0:
         return 0.0
-    if r <= PI_C:
-        return Cd * A * P_up * C_CHOKED / math.sqrt(R_GAS * t_eff)
-    bracket = r ** (2.0 / GAMMA) - r ** ((GAMMA + 1.0) / GAMMA)
+
+    pi_c = (2.0 / (gamma + 1.0)) ** (gamma / (gamma - 1.0))
+    c_choked = math.sqrt(
+        gamma * (2.0 / (gamma + 1.0)) ** ((gamma + 1.0) / (gamma - 1.0))
+    )
+
+    if r <= pi_c:
+        return Cd * A * P_up * c_choked / math.sqrt(r_gas * t_eff)
+
+    bracket = r ** (2.0 / gamma) - r ** ((gamma + 1.0) / gamma)
     if bracket <= 0.0:
         return 0.0
     return (
         Cd
         * A
         * P_up
-        * math.sqrt(2.0 * GAMMA / ((GAMMA - 1.0) * R_GAS * t_eff) * bracket)
+        * math.sqrt(2.0 * gamma / ((gamma - 1.0) * r_gas * t_eff) * bracket)
     )
+
+
+def mdot_orifice_pos(
+    P_up: float, T_up: float, P_dn: float, Cd: float, A: float
+) -> float:
+    return mdot_orifice_pos_props(P_up, T_up, P_dn, Cd, A, gamma=GAMMA, r_gas=R_GAS)
 
 
 def mdot_slot_pos(
@@ -46,11 +65,7 @@ def mdot_slot_pos(
 
 
 def friction_factor(Re: float, eps_over_D: float) -> float:
-    """Darcy friction factor.
-
-    Laminar: 64/Re.
-    Turbulent: Swamee–Jain approximation.
-    """
+    """Darcy friction factor (not Fanning)."""
     if Re <= 0.0:
         return 0.0
     if Re < 2300.0:
@@ -70,31 +85,42 @@ def mdot_short_tube_pos(
     eps: float,
     K_in: float,
     K_out: float,
+    gamma: float = GAMMA,
+    r_gas: float = R_GAS,
 ) -> float:
-    """Lossy-nozzle short-tube model via effective discharge coefficient.
+    """Lossy nozzle via effective Cd for short-tube (thick wall).
 
-    This is *not* Fanno-flow choking; it applies friction/minor-loss correction
-    through ``Cd_eff = Cd0/sqrt(1 + K_tot)`` with
-    ``K_tot = K_in + K_out + 4*f*(L/D)``.
+    This model applies additional minor/friction losses via Cd_eff and does not
+    model Fanno friction choking.
     """
     if P_up <= 0.0 or A_total <= 0.0 or D <= 0.0:
         return 0.0
 
     t_eff = max(T_up, T_SAFE)
-    if L <= 0.0 and K_in <= 0.0 and K_out <= 0.0:
-        return mdot_orifice_pos(P_up, t_eff, P_dn, Cd0, A_total)
+    if L <= 0.0 and K_in <= 0.0 and K_out <= 0.0 and eps <= 0.0:
+        return mdot_orifice_pos_props(
+            P_up, t_eff, P_dn, Cd0, A_total, gamma=gamma, r_gas=r_gas
+        )
 
     Cd_eff = float(Cd0)
     mdot = 0.0
-    for _ in range(2):
-        mdot_new = mdot_orifice_pos(P_up, t_eff, P_dn, Cd_eff, A_total)
-        rho = P_up / (R_GAS * t_eff)
+    for _ in range(5):
+        mdot_new = mdot_orifice_pos_props(
+            P_up, t_eff, P_dn, Cd_eff, A_total, gamma=gamma, r_gas=r_gas
+        )
+        rho = P_up / (r_gas * t_eff)
         u = mdot_new / max(rho * A_total, 1e-18)
         mu = mu_air_sutherland(t_eff)
         Re = rho * u * D / max(mu, 1e-18)
-        f = friction_factor(Re, eps / max(D, 1e-12))
-        K_tot = K_in + K_out + 4.0 * f * (L / max(D, 1e-12))
-        Cd_eff = Cd0 / math.sqrt(1.0 + max(K_tot, 0.0))
+        f_D = friction_factor(Re, eps / max(D, 1e-12))
+        K_fric = f_D * (L / max(D, 1e-12))
+        K_tot = K_in + K_out + K_fric
+        Cd_eff_new = 1.0 / math.sqrt(max(Cd0 ** (-2.0) + K_tot, 1e-18))
+
+        if mdot > 0 and abs(mdot_new - mdot) / max(mdot_new, 1e-18) < 0.01:
+            mdot = mdot_new
+            break
         mdot = 0.5 * mdot + 0.5 * mdot_new
+        Cd_eff = 0.5 * Cd_eff + 0.5 * Cd_eff_new
 
     return max(mdot, 0.0)

@@ -1,5 +1,14 @@
 # Changelog
 
+## v9.0.0
+- Added physically consistent short-tube thick-wall edge model with Darcy friction, minor losses, and iterative `Cd_eff` composition (lossy-nozzle, not Fanno).
+- Added split internal/exit short-tube loss parameters (`K_in_*`, `K_out_*`, `eps_*`) with backward-compatible alias CLI flags.
+- Added variable thermodynamics mode (`--thermo variable`) with temperature-dependent `cp/cv/gamma/h/u` and gamma-aware compressible discharge.
+- Added lumped wall thermal model (`--wall-model lumped`) with wall heat capacity, optional outside convection/radiation/source heat flux.
+- Added dynamic external pump model (`--external-model dynamic_pump`) with finite external volume and ultimate-pressure pump sink law.
+- Expanded validity diagnostics with `short_tube_flow` metrics (`Mach_max`, `Re_max`, `K_tot_max`, `Cd_eff_min`, `L_over_D`, `frac_fric`), and always save validity as `*_validity.json` plus `meta.json`.
+- Updated packaging metadata to 9.0.0 and refreshed docs for v9 assumptions.
+
 ## v0.8.5 - version alignment
 - Bumped active package/model naming from v8.4 to v8.5 (0.8.5) to avoid confusion.
 - Updated CLI artifact prefix to `v85_` for new runs.

@@ -65,6 +65,18 @@ EXT_NODE = -1
 Edge = OrificeEdge | SlotChannelEdge | ShortTubeEdge
 
 
+def _resolve_losses(cfg: NetworkConfig, scope: str) -> tuple[float, float, float]:
+    if scope == "int":
+        k_in = cfg.K_in_int if cfg.K_in_int is not None else cfg.K_in
+        k_out = cfg.K_out_int if cfg.K_out_int is not None else cfg.K_out
+        eps_um = cfg.eps_int_um if cfg.eps_int_um is not None else cfg.eps_um
+    else:
+        k_in = cfg.K_in_exit if cfg.K_in_exit is not None else cfg.K_in
+        k_out = cfg.K_out_exit if cfg.K_out_exit is not None else cfg.K_out
+        eps_um = cfg.eps_exit_um if cfg.eps_exit_um is not None else cfg.eps_um
+    return float(k_in), float(k_out), float(eps_um) * 1e-6
+
+
 def _make_exit_edge(
     cfg: NetworkConfig, a: int, A_exit_total: float, cd_exit: CdConst, label: str
 ) -> OrificeEdge | ShortTubeEdge:
@@ -72,7 +84,7 @@ def _make_exit_edge(
         return OrificeEdge(a, EXT_NODE, A_exit_total, cd_exit, label=label)
     D = cfg.d_exit_mm * 1e-3
     L = cfg.L_exit_mm * 1e-3
-    eps = cfg.eps_um * 1e-6
+    k_in, k_out, eps = _resolve_losses(cfg, "exit")
     return ShortTubeEdge(
         a=a,
         b=EXT_NODE,
@@ -80,8 +92,8 @@ def _make_exit_edge(
         D=D,
         L=L,
         eps=eps,
-        K_in=cfg.K_in,
-        K_out=cfg.K_out,
+        K_in=k_in,
+        K_out=k_out,
         Cd_model=cd_exit,
         label=label,
     )
@@ -99,7 +111,7 @@ def _make_int_edge(
         return OrificeEdge(a, b, A_int_total, cd_int, label=label)
     D = cfg.d_int_mm * 1e-3
     L = cfg.L_int_mm * 1e-3
-    eps = cfg.eps_um * 1e-6
+    k_in, k_out, eps = _resolve_losses(cfg, "int")
     return ShortTubeEdge(
         a=a,
         b=b,
@@ -107,8 +119,8 @@ def _make_int_edge(
         D=D,
         L=L,
         eps=eps,
-        K_in=cfg.K_in,
-        K_out=cfg.K_out,
+        K_in=k_in,
+        K_out=k_out,
         Cd_model=cd_int,
         label=label,
     )
