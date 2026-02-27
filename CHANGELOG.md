@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.5 - version alignment
+- Bumped active package/model naming from v8.4 to v8.5 (0.8.5) to avoid confusion.
+- Updated CLI artifact prefix to `v85_` for new runs.
+- Updated documentation references to the active v8.5 naming.
+
 ## v0.8.4 - repo hardening
 - Hardened packaging for standard PEP 517/518 src-layout installation.
 - Set v8.4 as the only active runtime package; legacy script remains archived only.

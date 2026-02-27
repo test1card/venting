@@ -32,7 +32,7 @@ def package_version() -> str:
     try:
         return version("venting")
     except PackageNotFoundError:
-        return "0.8.4"
+        return "0.8.5"
 
 
 def write_run_json(outdir: Path, params: dict, solver_settings: dict) -> None:

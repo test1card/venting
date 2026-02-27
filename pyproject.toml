@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "venting"
-version = "0.8.4"
-description = "v8.4 edge-based 0D venting solver"
+version = "0.8.5"
+description = "v8.5 edge-based 0D venting solver"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

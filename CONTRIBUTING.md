@@ -15,5 +15,5 @@ black --check .
 pytest -q --cov=venting --cov-report=term-missing
 ```
 
-3. Keep only v8.4 active in runtime package (`src/venting`).
+3. Keep only v8.5 active in runtime package (`src/venting`).
    Any legacy files must remain in `archive/` and not be imported by CLI/tests.

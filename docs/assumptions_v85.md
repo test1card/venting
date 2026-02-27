@@ -1,4 +1,4 @@
-# Assumptions and limitations (v8.4)
+# Assumptions and limitations (v8.5)
 
 - 0D lumped compartments.
 - Ideal-gas air with constant `gamma`, `R`, `c_p`, `c_v`.
