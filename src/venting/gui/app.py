@@ -16,6 +16,7 @@ from venting.run import export_case_artifacts, make_case_output_dir
 from venting.solver import solve_case_stream
 
 from .config import GuiCaseConfig
+from .state_layout import infer_layout_from_modes
 
 
 def load_gui_deps():
@@ -295,17 +296,21 @@ def create_main_window():
             t = payload["t"]
             y = payload["y"]
             n_nodes = int(payload.get("n_nodes", 1))
-            thermo = payload.get("thermo", "isothermal")
+            layout = infer_layout_from_modes(
+                payload.get("thermo", "isothermal"),
+                payload.get("wall_model", "fixed"),
+                n_nodes,
+            )
 
-            m = y[:n_nodes, :]
+            m = y[layout.m_slice, :]
             self.plot_m.clear()
             self.plot_m.plot(t, m[0], pen="y")
 
-            if thermo == "isothermal":
-                self.plot_t.clear()
-            else:
-                self.plot_t.clear()
-                self.plot_t.plot(t, y[n_nodes, :], pen="c")
+            self.plot_t.clear()
+            if layout.t_slice is not None:
+                t_arr = y[layout.t_slice, :]
+                self.plot_t.plot(t, t_arr[0], pen="c")
+
             self.status.setText(f"Running... {100 * payload['progress']:.0f}%")
 
         def on_finished(self, payload):
