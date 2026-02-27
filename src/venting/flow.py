@@ -1,6 +1,6 @@
 import math
 
-from .constants import C_CHOKED, GAMMA, PI_C, R_GAS, T_SAFE
+from .constants import GAMMA, R_GAS, T_SAFE
 
 
 def mu_air_sutherland(T: float) -> float:
