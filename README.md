@@ -195,6 +195,7 @@ python -m venting gate
 python -m venting sweep --profile linear --d-int 2 --d-exit 2 --cd-int 0.62 --cd-exit 0.62
 python -m venting thermal --profile linear --d 2 --h-list 0,1,5,15
 python -m venting sweep2d --profile linear --d-int-list 1.5,2.0 --d-exit-list 1.5,2.0
+python -m venting sweep --profile linear --d-int 2 --d-exit 4 --int-model short_tube --L-int-mm 1 --exit-model short_tube --L-exit-mm 1 --eps-um 0 --K-in 0.5 --K-out 1.0 --cd-int 0.62 --cd-exit 0.62 --thermo intermediate --h 0
 ```
 
 Профиль `table` ожидает CSV с колонками `t_s,P_Pa` через `--profile-file`.

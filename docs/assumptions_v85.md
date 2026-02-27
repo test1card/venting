@@ -5,3 +5,5 @@
 - Orifice model uses ideal isentropic relation with constant/effective `Cd`.
 - Slot model is laminar viscous approximation.
 - Model-form uncertainty remains in geometry and discharge coefficients.
+
+- Optional short-tube edge uses a lossy-nozzle `Cd_eff` correction with friction/minor losses; full Fanno-flow choking is not implemented.

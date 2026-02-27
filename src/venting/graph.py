@@ -38,6 +38,20 @@ class OrificeEdge:
 
 
 @dataclass(frozen=True)
+class ShortTubeEdge:
+    a: int
+    b: int
+    A_total: float
+    D: float
+    L: float
+    eps: float
+    K_in: float
+    K_out: float
+    Cd_model: CdConst
+    label: str = ""
+
+
+@dataclass(frozen=True)
 class SlotChannelEdge:
     a: int
     b: int
@@ -48,7 +62,56 @@ class SlotChannelEdge:
 
 
 EXT_NODE = -1
-Edge = OrificeEdge | SlotChannelEdge
+Edge = OrificeEdge | SlotChannelEdge | ShortTubeEdge
+
+
+def _make_exit_edge(
+    cfg: NetworkConfig, a: int, A_exit_total: float, cd_exit: CdConst, label: str
+) -> OrificeEdge | ShortTubeEdge:
+    if cfg.exit_model == "orifice" or cfg.L_exit_mm <= 0.0:
+        return OrificeEdge(a, EXT_NODE, A_exit_total, cd_exit, label=label)
+    D = cfg.d_exit_mm * 1e-3
+    L = cfg.L_exit_mm * 1e-3
+    eps = cfg.eps_um * 1e-6
+    return ShortTubeEdge(
+        a=a,
+        b=EXT_NODE,
+        A_total=A_exit_total,
+        D=D,
+        L=L,
+        eps=eps,
+        K_in=cfg.K_in,
+        K_out=cfg.K_out,
+        Cd_model=cd_exit,
+        label=label,
+    )
+
+
+def _make_int_edge(
+    cfg: NetworkConfig,
+    a: int,
+    b: int,
+    A_int_total: float,
+    cd_int: CdConst,
+    label: str,
+) -> OrificeEdge | ShortTubeEdge:
+    if cfg.int_model == "orifice" or cfg.L_int_mm <= 0.0:
+        return OrificeEdge(a, b, A_int_total, cd_int, label=label)
+    D = cfg.d_int_mm * 1e-3
+    L = cfg.L_int_mm * 1e-3
+    eps = cfg.eps_um * 1e-6
+    return ShortTubeEdge(
+        a=a,
+        b=b,
+        A_total=A_int_total,
+        D=D,
+        L=L,
+        eps=eps,
+        K_in=cfg.K_in,
+        K_out=cfg.K_out,
+        Cd_model=cd_int,
+        label=label,
+    )
 
 
 def build_branching_network(
@@ -58,6 +121,11 @@ def build_branching_network(
     assert_pos("N_par", cfg.N_par)
     assert_pos("V_cell", cfg.V_cell)
     assert_pos("V_vest", cfg.V_vest)
+
+    if cfg.int_model not in {"orifice", "short_tube"}:
+        raise ValueError("int_model must be 'orifice' or 'short_tube'")
+    if cfg.exit_model not in {"orifice", "short_tube"}:
+        raise ValueError("exit_model must be 'orifice' or 'short_tube'")
 
     nodes: list[GasNode] = [GasNode("vest", cfg.V_vest, cfg.A_wall_vest)]
     edges: list[Edge] = []
@@ -83,7 +151,7 @@ def build_branching_network(
     cd_exit = CdConst(cfg.Cd_exit)
 
     if not cfg.use_gap:
-        edges.append(OrificeEdge(0, EXT_NODE, A_exit_total, cd_exit, label="exit"))
+        edges.append(_make_exit_edge(cfg, 0, A_exit_total, cd_exit, label="exit"))
     else:
         edges.append(
             SlotChannelEdge(
@@ -91,17 +159,30 @@ def build_branching_network(
             )
         )
         edges.append(
-            OrificeEdge(gap_idx, EXT_NODE, A_exit_total, cd_exit, label="gap→ext(exit)")
+            _make_exit_edge(
+                cfg,
+                gap_idx,
+                A_exit_total,
+                cd_exit,
+                label="gap→ext(exit)",
+            )
         )
 
     cell1 = base
-    edges.append(OrificeEdge(cell1, 0, A_int_total, cd_int, label="A(cell1↔vest)"))
+    edges.append(
+        _make_int_edge(cfg, cell1, 0, A_int_total, cd_int, label="A(cell1↔vest)")
+    )
     for i in range(1, cfg.N_chain):
         a = base + i
         b = base + (i - 1)
         edges.append(
-            OrificeEdge(
-                a, b, A_int_total, cd_int, label=f"{chr(65 + i)}(cell{i + 1}↔cell{i})"
+            _make_int_edge(
+                cfg,
+                a,
+                b,
+                A_int_total,
+                cd_int,
+                label=f"{chr(65 + i)}(cell{i + 1}↔cell{i})",
             )
         )
 

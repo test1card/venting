@@ -57,6 +57,13 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         n_exit=args.n_exit,
         Cd_int=args.cd_int,
         Cd_exit=args.cd_exit,
+        int_model=args.int_model,
+        exit_model=args.exit_model,
+        L_int_mm=args.L_int_mm,
+        L_exit_mm=args.L_exit_mm,
+        eps_um=args.eps_um,
+        K_in=args.K_in,
+        K_out=args.K_out,
     )
     case = CaseConfig(
         thermo=args.thermo,
@@ -100,6 +107,13 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
             "npts": case.n_pts,
             "cd_int": args.cd_int,
             "cd_exit": args.cd_exit,
+            "int_model": args.int_model,
+            "exit_model": args.exit_model,
+            "L_int_mm": args.L_int_mm,
+            "L_exit_mm": args.L_exit_mm,
+            "eps_um": args.eps_um,
+            "K_in": args.K_in,
+            "K_out": args.K_out,
             "profile_pressure_unit": args.profile_pressure_unit,
         },
         solver_settings={"method": "Radau", "rtol": "1e-7|1e-6", "atol": "1e-10|1e-8"},
@@ -142,6 +156,17 @@ def build_parser() -> argparse.ArgumentParser:
         s.add_argument("--n-exit", type=int, default=1)
         s.add_argument("--cd-int", type=float, default=0.62)
         s.add_argument("--cd-exit", type=float, default=0.62)
+        s.add_argument(
+            "--int-model", choices=["orifice", "short_tube"], default="orifice"
+        )
+        s.add_argument(
+            "--exit-model", choices=["orifice", "short_tube"], default="orifice"
+        )
+        s.add_argument("--L-int-mm", type=float, default=0.0)
+        s.add_argument("--L-exit-mm", type=float, default=0.0)
+        s.add_argument("--eps-um", type=float, default=0.0)
+        s.add_argument("--K-in", type=float, default=0.5)
+        s.add_argument("--K-out", type=float, default=1.0)
         s.add_argument("--do-plots", action="store_true")
 
     sub.choices["sweep"].add_argument("--d-int", type=float, default=2.0)

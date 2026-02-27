@@ -5,8 +5,8 @@ import math
 import numpy as np
 
 from .constants import GAMMA, R_GAS, T_SAFE
-from .flow import mu_air_sutherland
-from .graph import SlotChannelEdge
+from .flow import mdot_short_tube_pos, mu_air_sutherland
+from .graph import ShortTubeEdge, SlotChannelEdge
 
 
 def _acoustic_flag(
@@ -23,12 +23,7 @@ def _acoustic_flag(
     t_dyn_min = float(np.min(t_dyn)) if t_dyn.size else float("inf")
 
     ratio = t_dyn_min / t_ac if t_ac > 0 else float("inf")
-    if ratio >= 20.0:
-        status = "ok"
-    elif ratio >= 5.0:
-        status = "warning"
-    else:
-        status = "warning"
+    status = "ok" if ratio >= 20.0 else "warning"
 
     return {
         "status": status,
@@ -52,15 +47,11 @@ def _slot_laminar_flag(
         a = node_index[e.a]
         b = node_index[e.b]
         for k in range(P.shape[1]):
-            if P[a, k] >= P[b, k]:
-                up = a
-            else:
-                up = b
+            up = a if P[a, k] >= P[b, k] else b
             p_up = max(float(P[up, k]), 0.0)
             t_up = max(float(T[up, k]), T_SAFE)
             rho = p_up / (R_GAS * t_up)
             mu = mu_air_sutherland(t_up)
-            # local velocity scale from pressure-driven slot relation
             u = (
                 (e.delta**2)
                 * abs(float(P[a, k] - P[b, k]))
@@ -81,6 +72,69 @@ def _slot_laminar_flag(
         "status": status,
         "Re_max": re_max,
         "message": "Slot model assumes laminar flow; warning if Re approaches turbulent regime",
+    }
+
+
+def _short_tube_flag(
+    edges: list,
+    P: np.ndarray,
+    T: np.ndarray,
+    node_index: dict[int, int],
+) -> dict:
+    re_max = 0.0
+    mach_max = 0.0
+    short_tubes = [e for e in edges if isinstance(e, ShortTubeEdge)]
+    if not short_tubes:
+        return {
+            "status": "ok",
+            "message": "No short-tube edges",
+            "Re_max": 0.0,
+            "Mach_max": 0.0,
+        }
+
+    for e in short_tubes:
+        a = node_index[e.a]
+        b = node_index[e.b] if e.b >= 0 else None
+        cd0 = e.Cd_model()
+        for k in range(P.shape[1]):
+            if b is None:
+                up = a
+                p_dn = 0.0
+            elif P[a, k] >= P[b, k]:
+                up = a
+                p_dn = max(float(P[b, k]), 0.0)
+            else:
+                up = b
+                p_dn = max(float(P[a, k]), 0.0)
+            p_up = max(float(P[up, k]), 0.0)
+            t_up = max(float(T[up, k]), T_SAFE)
+            md = mdot_short_tube_pos(
+                p_up,
+                t_up,
+                p_dn,
+                cd0,
+                e.A_total,
+                e.D,
+                e.L,
+                e.eps,
+                e.K_in,
+                e.K_out,
+            )
+            rho = p_up / (R_GAS * t_up)
+            u = md / max(rho * e.A_total, 1e-18)
+            a_s = math.sqrt(GAMMA * R_GAS * t_up)
+            mach = u / max(a_s, 1e-18)
+            mu = mu_air_sutherland(t_up)
+            re = rho * u * e.D / max(mu, 1e-18)
+            re_max = max(re_max, re)
+            mach_max = max(mach_max, mach)
+
+    status = "ok" if mach_max < 0.3 else "warning"
+    return {
+        "status": status,
+        "Re_max": re_max,
+        "Mach_max": mach_max,
+        "message": "Short-tube lossy-nozzle validity indicator",
     }
 
 
@@ -125,6 +179,7 @@ def evaluate_validity_flags(
         "state_integrity": _state_flag(m, T),
         "acoustic_uniformity_0D": _acoustic_flag(P, T, t, l_char_m),
         "slot_laminarity": _slot_laminar_flag(edges, P, T, node_index),
+        "short_tube_flow": _short_tube_flag(edges, P, T, node_index),
     }
 
     max_ext = float(np.max(P_ext)) if P_ext.size else 0.0

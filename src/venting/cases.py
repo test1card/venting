@@ -31,6 +31,13 @@ class NetworkConfig:
     n_exit: int
     Cd_int: float
     Cd_exit: float
+    int_model: str = "orifice"
+    exit_model: str = "orifice"
+    L_int_mm: float = 0.0
+    L_exit_mm: float = 0.0
+    eps_um: float = 0.0
+    K_in: float = 0.5
+    K_out: float = 1.0
     use_gap: bool = False
     V_gap: float = 0.0
     A_wall_gap: float = 0.0

@@ -4,8 +4,15 @@ from scipy.sparse import lil_matrix
 
 from .cases import CaseConfig
 from .constants import C_CHOKED, C_P, C_V, M_SAFE, P0, R_GAS, T0, T_SAFE
-from .flow import mdot_orifice_pos, mdot_slot_pos
-from .graph import EXT_NODE, ExternalBC, GasNode, OrificeEdge, SlotChannelEdge
+from .flow import mdot_orifice_pos, mdot_short_tube_pos, mdot_slot_pos
+from .graph import (
+    EXT_NODE,
+    ExternalBC,
+    GasNode,
+    OrificeEdge,
+    ShortTubeEdge,
+    SlotChannelEdge,
+)
 
 
 def build_rhs(
@@ -48,6 +55,72 @@ def build_rhs(
                             dm[b] += md
                         else:
                             md = mdot_orifice_pos(Pb, T[b], Pa, cd, e.A_total)
+                            dm[b] -= md
+                            dm[a] += md
+                elif isinstance(e, ShortTubeEdge):
+                    a, b = e.a, e.b
+                    cd0 = e.Cd_model()
+                    if b == EXT_NODE:
+                        bc = bc_map[a]
+                        pext = bc.profile.P(float(t))
+                        if P[a] >= pext:
+                            md = mdot_short_tube_pos(
+                                P[a],
+                                T[a],
+                                pext,
+                                cd0,
+                                e.A_total,
+                                e.D,
+                                e.L,
+                                e.eps,
+                                e.K_in,
+                                e.K_out,
+                            )
+                            dm[a] -= md
+                        else:
+                            md = mdot_short_tube_pos(
+                                pext,
+                                bc.T_ext,
+                                P[a],
+                                cd0,
+                                e.A_total,
+                                e.D,
+                                e.L,
+                                e.eps,
+                                e.K_in,
+                                e.K_out,
+                            )
+                            dm[a] += md
+                    else:
+                        Pa, Pb = P[a], P[b]
+                        if Pa >= Pb:
+                            md = mdot_short_tube_pos(
+                                Pa,
+                                T[a],
+                                Pb,
+                                cd0,
+                                e.A_total,
+                                e.D,
+                                e.L,
+                                e.eps,
+                                e.K_in,
+                                e.K_out,
+                            )
+                            dm[a] -= md
+                            dm[b] += md
+                        else:
+                            md = mdot_short_tube_pos(
+                                Pb,
+                                T[b],
+                                Pa,
+                                cd0,
+                                e.A_total,
+                                e.D,
+                                e.L,
+                                e.eps,
+                                e.K_in,
+                                e.K_out,
+                            )
                             dm[b] -= md
                             dm[a] += md
                 elif isinstance(e, SlotChannelEdge):
@@ -101,6 +174,78 @@ def build_rhs(
                         dE[b] += md * (C_P * T[a] - C_V * T[b])
                     else:
                         md = mdot_orifice_pos(Pb, T_eff[b], Pa, cd, e.A_total)
+                        dm[b] -= md
+                        dm[a] += md
+                        dE[b] += -md * R_GAS * T[b]
+                        dE[a] += md * (C_P * T[b] - C_V * T[a])
+            elif isinstance(e, ShortTubeEdge):
+                a, b = e.a, e.b
+                cd0 = e.Cd_model()
+                if b == EXT_NODE:
+                    bc = bc_map[a]
+                    pext = bc.profile.P(float(t))
+                    if P[a] >= pext:
+                        md = mdot_short_tube_pos(
+                            P[a],
+                            T_eff[a],
+                            pext,
+                            cd0,
+                            e.A_total,
+                            e.D,
+                            e.L,
+                            e.eps,
+                            e.K_in,
+                            e.K_out,
+                        )
+                        dm[a] -= md
+                        dE[a] += -md * R_GAS * T[a]
+                    else:
+                        md = mdot_short_tube_pos(
+                            pext,
+                            bc.T_ext,
+                            P[a],
+                            cd0,
+                            e.A_total,
+                            e.D,
+                            e.L,
+                            e.eps,
+                            e.K_in,
+                            e.K_out,
+                        )
+                        dm[a] += md
+                        dE[a] += md * (C_P * bc.T_ext - C_V * T[a])
+                else:
+                    Pa, Pb = P[a], P[b]
+                    if Pa >= Pb:
+                        md = mdot_short_tube_pos(
+                            Pa,
+                            T_eff[a],
+                            Pb,
+                            cd0,
+                            e.A_total,
+                            e.D,
+                            e.L,
+                            e.eps,
+                            e.K_in,
+                            e.K_out,
+                        )
+                        dm[a] -= md
+                        dm[b] += md
+                        dE[a] += -md * R_GAS * T[a]
+                        dE[b] += md * (C_P * T[a] - C_V * T[b])
+                    else:
+                        md = mdot_short_tube_pos(
+                            Pb,
+                            T_eff[b],
+                            Pa,
+                            cd0,
+                            e.A_total,
+                            e.D,
+                            e.L,
+                            e.eps,
+                            e.K_in,
+                            e.K_out,
+                        )
                         dm[b] -= md
                         dm[a] += md
                         dE[b] += -md * R_GAS * T[b]
@@ -187,7 +332,7 @@ def solve_case(
     A_max = 0.0
     Cd_max = 0.0
     for e in edges:
-        if isinstance(e, OrificeEdge):
+        if isinstance(e, (OrificeEdge, ShortTubeEdge)):
             A_max = max(A_max, e.A_total)
             Cd_max = max(Cd_max, e.Cd_model())
     V_min = float(np.min(V))
