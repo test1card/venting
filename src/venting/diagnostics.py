@@ -60,7 +60,11 @@ def summarize_result(
             break
     if A_exit_total is None:
         A_exit_total = max(
-            (e.A_total for e in edges_use if isinstance(e, (OrificeEdge, ShortTubeEdge))),
+            (
+                e.A_total
+                for e in edges_use
+                if isinstance(e, (OrificeEdge, ShortTubeEdge))
+            ),
             default=0.0,
         )
         Cd_exit = 0.62

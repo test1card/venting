@@ -25,8 +25,12 @@ def test_variable_thermo_regression_near_300k():
     nodes, edges, bcs = _single_node()
     c_int = CaseConfig("intermediate", 0.0, T0, 0.005, 40)
     c_var = CaseConfig("variable", 0.0, T0, 0.005, 40)
-    r_int = summarize_result(nodes, edges, bcs, c_int, solve_case(nodes, edges, bcs, c_int))
-    r_var = summarize_result(nodes, edges, bcs, c_var, solve_case(nodes, edges, bcs, c_var))
+    r_int = summarize_result(
+        nodes, edges, bcs, c_int, solve_case(nodes, edges, bcs, c_int)
+    )
+    r_var = summarize_result(
+        nodes, edges, bcs, c_var, solve_case(nodes, edges, bcs, c_var)
+    )
     rel = np.max(np.abs(r_var.P[0] - r_int.P[0]) / np.maximum(r_int.P[0], 1.0))
     assert float(rel) <= 0.01
 
@@ -35,8 +39,12 @@ def test_variable_gamma_changes_mdot():
     p_up = 101325.0
     p_dn = 30000.0
     area = np.pi * (0.002**2) / 4.0
-    m_cold = mdot_orifice_pos_props(p_up, 260.0, p_dn, 0.62, area, gamma=gamma_air(260.0))
-    m_hot = mdot_orifice_pos_props(p_up, 360.0, p_dn, 0.62, area, gamma=gamma_air(360.0))
+    m_cold = mdot_orifice_pos_props(
+        p_up, 260.0, p_dn, 0.62, area, gamma=gamma_air(260.0)
+    )
+    m_hot = mdot_orifice_pos_props(
+        p_up, 360.0, p_dn, 0.62, area, gamma=gamma_air(360.0)
+    )
     assert abs(m_cold - m_hot) > 0.0
 
 
@@ -53,8 +61,12 @@ def test_lumped_wall_large_capacity_matches_fixed():
         wall_C_per_area=1e12,
         wall_h_out=0.0,
     )
-    r_fixed = summarize_result(nodes, edges, bcs, fixed, solve_case(nodes, edges, bcs, fixed))
-    r_lumped = summarize_result(nodes, edges, bcs, lumped, solve_case(nodes, edges, bcs, lumped))
+    r_fixed = summarize_result(
+        nodes, edges, bcs, fixed, solve_case(nodes, edges, bcs, fixed)
+    )
+    r_lumped = summarize_result(
+        nodes, edges, bcs, lumped, solve_case(nodes, edges, bcs, lumped)
+    )
     rel = np.max(np.abs(r_lumped.P[0] - r_fixed.P[0]) / np.maximum(r_fixed.P[0], 1.0))
     assert float(rel) <= 0.01
 
@@ -72,8 +84,12 @@ def test_h_in_zero_matches_adiabatic():
         wall_C_per_area=1e5,
         wall_h_out=4.0,
     )
-    r_fixed = summarize_result(nodes, edges, bcs, c_fixed, solve_case(nodes, edges, bcs, c_fixed))
-    r_lumped = summarize_result(nodes, edges, bcs, c_lumped, solve_case(nodes, edges, bcs, c_lumped))
+    r_fixed = summarize_result(
+        nodes, edges, bcs, c_fixed, solve_case(nodes, edges, bcs, c_fixed)
+    )
+    r_lumped = summarize_result(
+        nodes, edges, bcs, c_lumped, solve_case(nodes, edges, bcs, c_lumped)
+    )
     rel = np.max(np.abs(r_lumped.P[0] - r_fixed.P[0]) / np.maximum(r_fixed.P[0], 1.0))
     assert float(rel) <= 0.01
 

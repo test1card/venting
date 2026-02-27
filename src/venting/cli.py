@@ -164,13 +164,21 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
 
 
 def _add_common_args(s: argparse.ArgumentParser) -> None:
-    s.add_argument("--profile", default="linear", choices=["linear", "step", "barometric", "table"])
-    s.add_argument("--external-model", default="profile", choices=["profile", "dynamic_pump"])
+    s.add_argument(
+        "--profile", default="linear", choices=["linear", "step", "barometric", "table"]
+    )
+    s.add_argument(
+        "--external-model", default="profile", choices=["profile", "dynamic_pump"]
+    )
     s.add_argument("--profile-file", default="")
     s.add_argument("--profile-pressure-unit", default="Pa", choices=["Pa", "mmHg"])
     s.add_argument("--rate-mmhg", type=float, default=20.0)
     s.add_argument("--step-time", type=float, default=0.01)
-    s.add_argument("--thermo", default="isothermal", choices=["isothermal", "intermediate", "variable"])
+    s.add_argument(
+        "--thermo",
+        default="isothermal",
+        choices=["isothermal", "intermediate", "variable"],
+    )
     s.add_argument("--h", type=float, default=0.0)
     s.add_argument("--duration", type=float, default=150.0)
     s.add_argument("--npts", type=int, default=800)
@@ -188,9 +196,24 @@ def _add_common_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--K-in-exit", type=float, default=None)
     s.add_argument("--K-out-exit", type=float, default=None)
     s.add_argument("--eps-exit-um", type=float, default=None)
-    s.add_argument("--K-in", type=float, default=0.5, help="Deprecated alias for both internal/exit K_in")
-    s.add_argument("--K-out", type=float, default=1.0, help="Deprecated alias for both internal/exit K_out")
-    s.add_argument("--eps-um", type=float, default=0.0, help="Deprecated alias for both internal/exit roughness")
+    s.add_argument(
+        "--K-in",
+        type=float,
+        default=0.5,
+        help="Deprecated alias for both internal/exit K_in",
+    )
+    s.add_argument(
+        "--K-out",
+        type=float,
+        default=1.0,
+        help="Deprecated alias for both internal/exit K_out",
+    )
+    s.add_argument(
+        "--eps-um",
+        type=float,
+        default=0.0,
+        help="Deprecated alias for both internal/exit roughness",
+    )
     s.add_argument("--wall-model", choices=["fixed", "lumped"], default="fixed")
     s.add_argument("--wall-C-per-area", type=float, default=1e9)
     s.add_argument("--wall-h-out", type=float, default=0.0)

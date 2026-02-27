@@ -38,7 +38,12 @@ def mdot_orifice_pos_props(
     bracket = r ** (2.0 / gamma) - r ** ((gamma + 1.0) / gamma)
     if bracket <= 0.0:
         return 0.0
-    return Cd * A * P_up * math.sqrt(2.0 * gamma / ((gamma - 1.0) * r_gas * t_eff) * bracket)
+    return (
+        Cd
+        * A
+        * P_up
+        * math.sqrt(2.0 * gamma / ((gamma - 1.0) * r_gas * t_eff) * bracket)
+    )
 
 
 def mdot_orifice_pos(

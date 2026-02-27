@@ -34,7 +34,9 @@ def _property_model(thermo: str):
     raise ValueError("Property model valid for 'intermediate' or 'variable'")
 
 
-def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig):
+def build_rhs(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
     N = len(nodes)
     V = np.array([n.V for n in nodes], dtype=float)
     A_w = np.array([n.A_wall for n in nodes], dtype=float)
@@ -60,37 +62,81 @@ def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: Ca
                         pext = bc.profile.P(float(t))
                         if P[a] >= pext:
                             if isinstance(e, OrificeEdge):
-                                md = mdot_orifice_pos_props(P[a], T[a], pext, cd0, e.A_total)
+                                md = mdot_orifice_pos_props(
+                                    P[a], T[a], pext, cd0, e.A_total
+                                )
                             else:
                                 md = mdot_short_tube_pos(
-                                    P[a], T[a], pext, cd0, e.A_total, e.D, e.L, e.eps, e.K_in, e.K_out
+                                    P[a],
+                                    T[a],
+                                    pext,
+                                    cd0,
+                                    e.A_total,
+                                    e.D,
+                                    e.L,
+                                    e.eps,
+                                    e.K_in,
+                                    e.K_out,
                                 )
                             dm[a] -= md
                         else:
                             if isinstance(e, OrificeEdge):
-                                md = mdot_orifice_pos_props(pext, bc.T_ext, P[a], cd0, e.A_total)
+                                md = mdot_orifice_pos_props(
+                                    pext, bc.T_ext, P[a], cd0, e.A_total
+                                )
                             else:
                                 md = mdot_short_tube_pos(
-                                    pext, bc.T_ext, P[a], cd0, e.A_total, e.D, e.L, e.eps, e.K_in, e.K_out
+                                    pext,
+                                    bc.T_ext,
+                                    P[a],
+                                    cd0,
+                                    e.A_total,
+                                    e.D,
+                                    e.L,
+                                    e.eps,
+                                    e.K_in,
+                                    e.K_out,
                                 )
                             dm[a] += md
                     else:
                         Pa, Pb = P[a], P[b]
                         if Pa >= Pb:
                             if isinstance(e, OrificeEdge):
-                                md = mdot_orifice_pos_props(Pa, T[a], Pb, cd0, e.A_total)
+                                md = mdot_orifice_pos_props(
+                                    Pa, T[a], Pb, cd0, e.A_total
+                                )
                             else:
                                 md = mdot_short_tube_pos(
-                                    Pa, T[a], Pb, cd0, e.A_total, e.D, e.L, e.eps, e.K_in, e.K_out
+                                    Pa,
+                                    T[a],
+                                    Pb,
+                                    cd0,
+                                    e.A_total,
+                                    e.D,
+                                    e.L,
+                                    e.eps,
+                                    e.K_in,
+                                    e.K_out,
                                 )
                             dm[a] -= md
                             dm[b] += md
                         else:
                             if isinstance(e, OrificeEdge):
-                                md = mdot_orifice_pos_props(Pb, T[b], Pa, cd0, e.A_total)
+                                md = mdot_orifice_pos_props(
+                                    Pb, T[b], Pa, cd0, e.A_total
+                                )
                             else:
                                 md = mdot_short_tube_pos(
-                                    Pb, T[b], Pa, cd0, e.A_total, e.D, e.L, e.eps, e.K_in, e.K_out
+                                    Pb,
+                                    T[b],
+                                    Pa,
+                                    cd0,
+                                    e.A_total,
+                                    e.D,
+                                    e.L,
+                                    e.eps,
+                                    e.K_in,
+                                    e.K_out,
                                 )
                             dm[b] -= md
                             dm[a] += md
@@ -110,7 +156,9 @@ def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: Ca
         return rhs, n_vars
 
     if case.thermo not in {"intermediate", "variable"}:
-        raise ValueError("case.thermo must be 'isothermal', 'intermediate', or 'variable'")
+        raise ValueError(
+            "case.thermo must be 'isothermal', 'intermediate', or 'variable'"
+        )
 
     cp_fn, cv_fn, gamma_fn, h_fn, u_fn = _property_model(case.thermo)
 
@@ -287,7 +335,9 @@ def build_rhs(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: Ca
     return rhs, n_vars
 
 
-def solve_case(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig):
+def solve_case(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
     nodes_local = list(nodes)
     edges_local = list(edges)
     bcs_local = list(bcs)
@@ -364,8 +414,10 @@ def solve_case(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: C
         dy = rhs_core(t, y)
         if ext_idx is not None:
             P = p_from_state(y)
-            mdot_pump = case.pump_speed_m3s * max(P[ext_idx] - case.P_ult_Pa, 0.0) / (
-                R_GAS * max(case.T_ext, T_SAFE)
+            mdot_pump = (
+                case.pump_speed_m3s
+                * max(P[ext_idx] - case.P_ult_Pa, 0.0)
+                / (R_GAS * max(case.T_ext, T_SAFE))
             )
             dy[ext_idx] -= mdot_pump
             if case.thermo != "isothermal":
@@ -417,7 +469,9 @@ def solve_case(nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: C
             A_max = max(A_max, e.A_total)
             Cd_max = max(Cd_max, e.Cd_model())
     V_min = float(np.min(V))
-    mdot_ch = Cd_max * A_max * C_CHOKED * P0 / math.sqrt(R_GAS * T0) if A_max > 0 else 0.0
+    mdot_ch = (
+        Cd_max * A_max * C_CHOKED * P0 / math.sqrt(R_GAS * T0) if A_max > 0 else 0.0
+    )
     tau_min = (V_min * P0) / (R_GAS * T0 * mdot_ch) if mdot_ch > 0 else 1.0
     max_step = max(min(case.duration / 2000.0, tau_min / 10.0), 1e-4)
 

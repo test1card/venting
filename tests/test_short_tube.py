@@ -47,8 +47,12 @@ def test_short_tube_mdot_decreases_with_roughness():
     area = circle_area_from_d_mm(4.0)
     diam = 4.0e-3
 
-    m_smooth = mdot_short_tube_pos(p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
-    m_rough = mdot_short_tube_pos(p_up, t_up, p_dn, cd0, area, diam, 3e-3, 200e-6, 0.5, 1.0)
+    m_smooth = mdot_short_tube_pos(
+        p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0
+    )
+    m_rough = mdot_short_tube_pos(
+        p_up, t_up, p_dn, cd0, area, diam, 3e-3, 200e-6, 0.5, 1.0
+    )
     assert m_smooth > m_rough
 
 

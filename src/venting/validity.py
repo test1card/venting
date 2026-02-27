@@ -9,7 +9,9 @@ from .flow import friction_factor, mdot_short_tube_pos, mu_air_sutherland
 from .graph import EXT_NODE, ShortTubeEdge, SlotChannelEdge
 
 
-def _acoustic_flag(P: np.ndarray, T: np.ndarray, t: np.ndarray, l_char_m: float) -> dict:
+def _acoustic_flag(
+    P: np.ndarray, T: np.ndarray, t: np.ndarray, l_char_m: float
+) -> dict:
     t_mean = float(np.mean(np.maximum(T, T_SAFE)))
     c = math.sqrt(GAMMA * R_GAS * t_mean)
     t_ac = l_char_m / max(c, 1e-12)
@@ -50,8 +52,10 @@ def _slot_laminar_flag(
             t_up = max(float(T[up, k]), T_SAFE)
             rho = p_up / (R_GAS * t_up)
             mu = mu_air_sutherland(t_up)
-            u = (e.delta**2) * abs(float(P[a, k] - P[b, k])) / (
-                12.0 * mu * max(e.L, 1e-12)
+            u = (
+                (e.delta**2)
+                * abs(float(P[a, k] - P[b, k]))
+                / (12.0 * mu * max(e.L, 1e-12))
             )
             d_h = 2.0 * e.delta
             re = rho * u * d_h / max(mu, 1e-20)

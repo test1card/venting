@@ -94,7 +94,9 @@ def dump_meta_json(outdir: Path, filename: str, meta: dict) -> None:
 
 def write_validity_json(outdir: Path, stem: str, validity_flags: dict) -> Path:
     path = outdir / f"{stem}_validity.json"
-    path.write_text(json.dumps(validity_flags, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(validity_flags, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return path
 
 
