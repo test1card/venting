@@ -29,7 +29,11 @@ def _profile(args):
         return make_profile_step(P0, args.step_time)
     if args.profile == "barometric":
         return make_profile_exponential(P0, args.rate_mmhg, p_floor=10.0)
-    return make_profile_from_table("envelope_table", Path(args.profile_file))
+    return make_profile_from_table(
+        "envelope_table",
+        Path(args.profile_file),
+        pressure_unit=args.profile_pressure_unit,
+    )
 
 
 def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
@@ -96,6 +100,7 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
             "npts": case.n_pts,
             "cd_int": args.cd_int,
             "cd_exit": args.cd_exit,
+            "profile_pressure_unit": args.profile_pressure_unit,
         },
         solver_settings={"method": "Radau", "rtol": "1e-7|1e-6", "atol": "1e-10|1e-8"},
     )
@@ -119,6 +124,12 @@ def build_parser() -> argparse.ArgumentParser:
             choices=["linear", "step", "barometric", "table"],
         )
         s.add_argument("--profile-file", default="")
+        s.add_argument(
+            "--profile-pressure-unit",
+            default="Pa",
+            choices=["Pa", "mmHg"],
+            help="Unit for table profile pressure column",
+        )
         s.add_argument("--rate-mmhg", type=float, default=20.0)
         s.add_argument("--step-time", type=float, default=0.01)
         s.add_argument(

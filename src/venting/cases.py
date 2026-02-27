@@ -14,6 +14,7 @@ class CaseConfig:
     n_pts: int
     p_stop: float = P_STOP
     p_rms_tol: float = 1.0
+    l_char_m: float = 0.1
 
 
 @dataclass(frozen=True)

@@ -60,7 +60,15 @@ def make_profile_exponential(
     )
 
 
-def make_profile_from_table(name: str, table_path: Path) -> Profile:
+def make_profile_from_table(
+    name: str,
+    table_path: Path,
+    pressure_unit: str = "Pa",
+) -> Profile:
+    """Load profile table with CSV columns: t_s,P_Pa.
+
+    pressure_unit: "Pa" | "mmHg"
+    """
     arr = np.loadtxt(str(table_path), delimiter=",")
     if arr.ndim != 2 or arr.shape[1] < 2:
         raise ValueError("Profile table must be CSV with columns: t_s, P_Pa")
@@ -68,6 +76,18 @@ def make_profile_from_table(name: str, table_path: Path) -> Profile:
     p_tab = np.array(arr[:, 1], dtype=float)
     if not np.all(np.diff(t_tab) > 0):
         raise ValueError("Profile table time must be strictly increasing")
+
+    if pressure_unit.lower() == "mmhg":
+        p_tab = p_tab * 133.322
+    elif pressure_unit.lower() != "pa":
+        raise ValueError("pressure_unit must be 'Pa' or 'mmHg'")
+
+    p_max = float(np.max(p_tab))
+    if pressure_unit.lower() == "pa" and 200.0 <= p_max <= 2000.0:
+        raise ValueError(
+            "Profile table pressure looks like mmHg values provided as Pa. "
+            "Use pressure_unit='mmHg' or convert CSV to Pa."
+        )
 
     def p_fn(t: float) -> float:
         if t <= t_tab[0]:

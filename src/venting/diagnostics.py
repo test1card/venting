@@ -6,6 +6,7 @@ import numpy as np
 from .cases import CaseConfig, SolveResult
 from .constants import C_CHOKED, P0, PI_C, R_GAS, T0, T_SAFE
 from .graph import EXT_NODE, GasNode, OrificeEdge, SlotChannelEdge
+from .validity import evaluate_validity_flags
 
 
 def compute_tau_exit(total_volume: float, Cd_exit: float, A_exit_total: float) -> float:
@@ -117,6 +118,17 @@ def summarize_result(
                 "dP_signed": float(dp[idx]),
             }
 
+    validity_flags = evaluate_validity_flags(
+        nodes=nodes,
+        edges=edges,
+        P=P,
+        T=T_eff,
+        m=m,
+        P_ext=P_ext,
+        t=t,
+        l_char_m=case.l_char_m,
+    )
+
     meta = {
         "case": asdict(case),
         "nodes": [asdict(n) for n in nodes],
@@ -128,6 +140,7 @@ def summarize_result(
             "t_end": float(sol.t[-1]),
             "n_steps": int(len(sol.t)),
         },
+        "validity_flags": validity_flags,
     }
     return SolveResult(
         t=t,
