@@ -16,7 +16,9 @@ ALLOWED_PROFILE = {"linear", "step", "barometric", "table"}
 @dataclass
 class GuiCaseConfig:
     # geometry/network (SI unless suffix says otherwise)
+    topology: str = "single_chain"
     N_chain: int = 10
+    N_chain_b: int = 10
     N_par: int = 2
     V_cell_m3: float = 1.0e-4
     V_vest_m3: float = 1.0e-4
@@ -77,6 +79,8 @@ class GuiCaseConfig:
             raise ValueError("wall_model is invalid")
         if self.external_model not in ALLOWED_EXTERNAL:
             raise ValueError("external_model is invalid")
+        if self.topology not in {"single_chain", "two_chain_shared_vest"}:
+            raise ValueError("topology is invalid")
         if (
             self.int_model not in ALLOWED_EDGE_MODEL
             or self.exit_model not in ALLOWED_EDGE_MODEL
@@ -87,6 +91,7 @@ class GuiCaseConfig:
         for name in [
             "N_chain",
             "N_par",
+            "N_chain_b",
             "n_int_per_interface",
             "n_exit",
             "n_pts",
@@ -109,6 +114,8 @@ class GuiCaseConfig:
         self.validate()
         return NetworkConfig(
             N_chain=self.N_chain,
+            N_chain_b=self.N_chain_b,
+            topology=self.topology,
             N_par=self.N_par,
             V_cell=self.V_cell_m3,
             V_vest=self.V_vest_m3,

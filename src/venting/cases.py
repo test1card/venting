@@ -29,33 +29,38 @@ class CaseConfig:
     P_ult_Pa: float = 0.0
 
 
+NumberOrList = float | int | list[float] | tuple[float, ...]
+
+
 @dataclass(frozen=True)
 class NetworkConfig:
     N_chain: int
     N_par: int
-    V_cell: float
+    V_cell: NumberOrList
     V_vest: float
-    A_wall_cell: float
+    A_wall_cell: NumberOrList
     A_wall_vest: float
-    d_int_mm: float
-    n_int_per_interface: int
+    d_int_mm: NumberOrList
+    n_int_per_interface: NumberOrList
     d_exit_mm: float
     n_exit: int
-    Cd_int: float
+    Cd_int: NumberOrList
     Cd_exit: float
     int_model: str = "orifice"
     exit_model: str = "orifice"
-    L_int_mm: float = 0.0
+    L_int_mm: NumberOrList = 0.0
     L_exit_mm: float = 0.0
     eps_um: float = 0.0
     K_in: float = 0.5
     K_out: float = 1.0
-    K_in_int: float | None = None
-    K_out_int: float | None = None
-    eps_int_um: float | None = None
+    K_in_int: NumberOrList | None = None
+    K_out_int: NumberOrList | None = None
+    eps_int_um: NumberOrList | None = None
     K_in_exit: float | None = None
     K_out_exit: float | None = None
     eps_exit_um: float | None = None
+    topology: str = "single_chain"  # single_chain|two_chain_shared_vest
+    N_chain_b: int | None = None
     use_gap: bool = False
     V_gap: float = 0.0
     A_wall_gap: float = 0.0

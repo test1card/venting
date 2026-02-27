@@ -40,6 +40,8 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
     net_cfg = NetworkConfig(
         N_chain=10,
         N_par=2,
+        topology=args.topology,
+        N_chain_b=args.n_chain_b,
         V_cell=preset.V_cell,
         V_vest=preset.V_vest,
         A_wall_cell=preset.A_wall_cell,
@@ -120,6 +122,8 @@ def _run_one(args, d_int: float, d_exit: float, h: float | None = None):
         "K_out_alias": args.K_out,
         "eps_um_alias": args.eps_um,
         "profile_pressure_unit": args.profile_pressure_unit,
+        "topology": args.topology,
+        "n_chain_b": args.n_chain_b,
         "pump_speed_m3s": case.pump_speed_m3s,
         "V_ext": case.V_ext,
         "P_ult_Pa": case.P_ult_Pa,
@@ -150,6 +154,12 @@ def _add_common_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--duration", type=float, default=150.0)
     s.add_argument("--npts", type=int, default=800)
     s.add_argument("--n-int", type=int, default=1)
+    s.add_argument(
+        "--topology",
+        choices=["single_chain", "two_chain_shared_vest"],
+        default="single_chain",
+    )
+    s.add_argument("--n-chain-b", type=int, default=10)
     s.add_argument("--n-exit", type=int, default=1)
     s.add_argument("--cd-int", type=float, default=0.62)
     s.add_argument("--cd-exit", type=float, default=0.62)

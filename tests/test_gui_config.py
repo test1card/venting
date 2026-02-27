@@ -4,9 +4,17 @@ from venting.gui.config import GuiCaseConfig
 
 
 def test_gui_config_roundtrip_json():
-    cfg = GuiCaseConfig(N_chain=7, profile_kind="step", step_time_s=0.2)
+    cfg = GuiCaseConfig(
+        topology="two_chain_shared_vest",
+        N_chain=7,
+        N_chain_b=5,
+        profile_kind="step",
+        step_time_s=0.2,
+    )
     loaded = GuiCaseConfig.from_json(cfg.to_json())
+    assert loaded.topology == "two_chain_shared_vest"
     assert loaded.N_chain == 7
+    assert loaded.N_chain_b == 5
     assert loaded.profile_kind == "step"
     assert loaded.step_time_s == 0.2
 

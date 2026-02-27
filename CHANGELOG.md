@@ -1,6 +1,10 @@
 # Changelog
 
 ## v10.0.0
+- Fixed Radau setup by removing invalid identity-only Jacobian sparsity hint.
+- Added scalar-or-list network parameter support and a new `two_chain_shared_vest` topology.
+- Updated GUI worker/progress handling and stop-check integration for true streaming callbacks.
+- Added regression tests for baseline gate behavior and topology/scalar-list compatibility.
 - Added desktop GUI (`python -m venting gui`) with optional dependencies (`.[gui]`) for configuring and running venting cases.
 - Added live plotting tabs for pressure, temperature, mass, peak diagnostics, and validity flags while solving in a background thread.
 - Added JSON save/load schema for GUI cases with explicit units and validation.

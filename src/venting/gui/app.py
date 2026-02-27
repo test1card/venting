@@ -72,7 +72,7 @@ def create_main_window():
                 sol = solve_case_stream(
                     nodes, edges, bcs, case, callback=on_chunk, n_chunks=20
                 )
-                if self.stop_requested:
+                if self.stop_requested or not sol.success:
                     return
                 res = summarize_result(nodes, edges, bcs, case, sol)
                 self.finished_result.emit(
@@ -154,7 +154,11 @@ def create_main_window():
             add_line("K_out_int", self.cfg.K_out_int)
             add_line("K_in_exit", self.cfg.K_in_exit)
             add_line("K_out_exit", self.cfg.K_out_exit)
+            add_combo(
+                "topology", ["single_chain", "two_chain_shared_vest"], self.cfg.topology
+            )
             add_line("N_chain", self.cfg.N_chain)
+            add_line("N_chain_b", self.cfg.N_chain_b)
             add_line("N_par", self.cfg.N_par)
             add_line("V_cell_m3", self.cfg.V_cell_m3)
             add_line("V_vest_m3", self.cfg.V_vest_m3)
@@ -233,7 +237,14 @@ def create_main_window():
                     value = widget.text()
                 kwargs[key] = value
 
-            int_fields = {"N_chain", "N_par", "n_int_per_interface", "n_exit", "n_pts"}
+            int_fields = {
+                "N_chain",
+                "N_chain_b",
+                "N_par",
+                "n_int_per_interface",
+                "n_exit",
+                "n_pts",
+            }
             float_fields = (
                 set(kwargs)
                 - int_fields
@@ -283,14 +294,19 @@ def create_main_window():
         def on_progress(self, payload):
             t = payload["t"]
             y = payload["y"]
-            n = y.shape[0] // 2 if y.shape[0] > 2 else 1
-            m = y[:n, :]
+            n_nodes = int(payload.get("n_nodes", 1))
+            thermo = payload.get("thermo", "isothermal")
+
+            m = y[:n_nodes, :]
             self.plot_m.clear()
             self.plot_m.plot(t, m[0], pen="y")
-            if y.shape[0] >= 2 * n:
+
+            if thermo == "isothermal":
                 self.plot_t.clear()
-                self.plot_t.plot(t, y[n, :], pen="c")
-            self.status.setText(f"Running... {100*payload['progress']:.0f}%")
+            else:
+                self.plot_t.clear()
+                self.plot_t.plot(t, y[n_nodes, :], pen="c")
+            self.status.setText(f"Running... {100 * payload['progress']:.0f}%")
 
         def on_finished(self, payload):
             self.latest_res = payload["res"]
