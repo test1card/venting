@@ -179,7 +179,7 @@ def _fanno_state(
         md = mdot_orifice_pos_props(P_up, t_eff, P_dn, Cd0, A_total, gamma, r_gas)
         return {"mdot": md, "choked": False, "mach_exit": 0.0, "f_D": 0.0}
 
-    if max(P_dn, 0.0) / P_up > 0.8:
+    if max(P_dn, 0.0) / P_up >= 0.6:
         md = mdot_short_tube_pos(
             P_up,
             t_eff,
@@ -205,7 +205,7 @@ def _fanno_state(
 
     for _ in range(5):
         f_D = max(friction_factor(re_guess, eps / max(D, 1e-12)), 1e-4)
-        f4ld = 4.0 * f_D * L / max(D, 1e-12)
+        f4ld = 4.0 * f_D * L / max(D, 1e-12) + K_in + K_out
 
         if f4ld < 1e-3:
             md = mdot_short_tube_pos(
@@ -336,9 +336,11 @@ def mdot_fanno_tube(
     md_l = mdot_short_tube_pos(
         P_up, T_up, P_dn, Cd0, A_total, D, L, eps, K_in, K_out, gamma, r_gas
     )
+    if md_f < 1e-3 * max(md_l, 1e-18):
+        md_f = md_l
     md = min(md_f, md_l)
-    if P_up > 0 and (P_dn / P_up) < 0.2:
-        md = min(md, 0.99 * md_l)
+    if P_up > 0 and (P_dn / P_up) <= 0.5:
+        md = min(md_l, max(md, 0.99 * md_l))
     return md
 
 

@@ -163,3 +163,55 @@ def test_fanno_choking_mach_limit():
     m1 = mdot_fanno_tube(p_up, t_up, 5000.0, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
     m2 = mdot_fanno_tube(p_up, t_up, 500.0, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
     assert m2 <= 1.05 * m1
+
+
+def test_fanno_sees_K_losses():
+    """Fanno mdot must decrease when K_in/K_out increase."""
+    p_up = 101325.0
+    p_dn = 0.0
+    t_up = 300.0
+    cd0 = 0.62
+    area = circle_area_from_d_mm(2.0)
+    diam = 2.0e-3
+    L = 3e-3
+
+    m_k0 = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, L, 0.0, 0.0, 0.0)
+    m_k15 = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, L, 0.0, 0.5, 1.0)
+    m_k3 = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, L, 0.0, 1.0, 2.0)
+
+    assert m_k15 < m_k0, f"K=1.5 should give less flow: {m_k15} vs {m_k0}"
+    assert m_k3 < m_k15, f"K=3.0 should give less flow: {m_k3} vs {m_k15}"
+
+
+def test_fanno_with_K_below_lossy():
+    """For typical parameters, Fanno with K losses should be below lossy nozzle."""
+    p_up = 101325.0
+    p_dn = 0.0
+    t_up = 300.0
+    cd0 = 0.62
+    area = circle_area_from_d_mm(2.0)
+    diam = 2.0e-3
+    L = 3e-3
+
+    m_fanno = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, L, 0.0, 0.5, 1.0)
+    m_lossy = mdot_short_tube_pos(p_up, t_up, p_dn, cd0, area, diam, L, 0.0, 0.5, 1.0)
+    assert m_fanno < m_lossy, (
+        f"Fanno with K should give LESS flow than lossy nozzle: "
+        f"fanno={m_fanno:.6f}, lossy={m_lossy:.6f}"
+    )
+    assert m_fanno / m_lossy < 1.0
+
+
+def test_fanno_monotonic_with_K():
+    """Flow should be monotonic non-decreasing as downstream pressure decreases."""
+    p_up = 101325.0
+    t_up = 300.0
+    cd0 = 0.62
+    area = circle_area_from_d_mm(2.0)
+    diam = 2.0e-3
+
+    prev = 0.0
+    for r in [0.99, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]:
+        m = mdot_fanno_tube(p_up, t_up, r * p_up, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
+        assert m >= 0.98 * prev - 1e-12, f"Non-monotonic at r={r}: {m} < {prev}"
+        prev = m
