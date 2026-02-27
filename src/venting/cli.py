@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .cases import CaseConfig, NetworkConfig
+from .compare import (
+    compare_runs,
+    format_comparison_table,
+    load_run,
+    write_comparison_csv,
+)
 from .constants import P0, P_STOP, T0
 from .gates import gate_single, gate_two
+from .montecarlo import run_mc, write_mc_outputs
 from .plotting import plot_basic
 from .presets import get_default_panel_preset_v9
 from .profiles import (
@@ -163,8 +171,12 @@ def _add_common_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--n-exit", type=int, default=1)
     s.add_argument("--cd-int", type=float, default=0.62)
     s.add_argument("--cd-exit", type=float, default=0.62)
-    s.add_argument("--int-model", choices=["orifice", "short_tube"], default="orifice")
-    s.add_argument("--exit-model", choices=["orifice", "short_tube"], default="orifice")
+    s.add_argument(
+        "--int-model", choices=["orifice", "short_tube", "fanno"], default="orifice"
+    )
+    s.add_argument(
+        "--exit-model", choices=["orifice", "short_tube", "fanno"], default="orifice"
+    )
     s.add_argument("--L-int-mm", type=float, default=0.0)
     s.add_argument("--L-exit-mm", type=float, default=0.0)
     s.add_argument("--K-in-int", type=float, default=None)
@@ -227,6 +239,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.choices["sweep2d"].add_argument("--d-int-list", default="1.0,2.0")
     sub.choices["sweep2d"].add_argument("--d-exit-list", default="1.0,2.0")
+
+    c = sub.add_parser("compare")
+    c.add_argument("run_a")
+    c.add_argument("run_b")
+    c.add_argument("--output", default="")
+
+    mc = sub.add_parser("mc")
+    _add_common_args(mc)
+    mc.add_argument("--d-int", type=float, default=2.0)
+    mc.add_argument("--d-exit", type=float, default=2.0)
+    mc.add_argument("--cd-int-range", default="0.5,0.7")
+    mc.add_argument("--cd-exit-range", default="0.55,0.65")
+    mc.add_argument("--n-samples", type=int, default=100)
+    mc.add_argument("--seed", type=int, default=None)
+
     return p
 
 
@@ -244,6 +271,79 @@ def main() -> None:
         from .gui.main import main as gui_main
 
         gui_main()
+        return
+    if args.cmd == "compare":
+        run_a = load_run(Path(args.run_a))
+        run_b = load_run(Path(args.run_b))
+        comp = compare_runs(run_a, run_b)
+        print(format_comparison_table(comp))
+        if args.output:
+            write_comparison_csv(comp, Path(args.output))
+        return
+    if args.cmd == "mc":
+        lo_i, hi_i = [float(x) for x in args.cd_int_range.split(",", 1)]
+        lo_e, hi_e = [float(x) for x in args.cd_exit_range.split(",", 1)]
+        prof = _profile(args)
+        preset = get_default_panel_preset_v9()
+        net_cfg = NetworkConfig(
+            N_chain=10,
+            N_par=args.n_int,
+            V_cell=preset.V_cell,
+            V_vest=preset.V_vest,
+            A_wall_cell=preset.A_wall_cell,
+            A_wall_vest=preset.A_wall_vest,
+            d_int_mm=args.d_int,
+            n_int_per_interface=1,
+            d_exit_mm=args.d_exit,
+            n_exit=args.n_exit,
+            Cd_int=args.cd_int,
+            Cd_exit=args.cd_exit,
+            int_model=args.int_model,
+            exit_model=args.exit_model,
+            L_int_mm=args.L_int_mm,
+            L_exit_mm=args.L_exit_mm,
+            K_in=args.K_in,
+            K_out=args.K_out,
+            eps_um=args.eps_um,
+            K_in_int=args.K_in_int,
+            K_out_int=args.K_out_int,
+            eps_int_um=args.eps_int_um,
+            K_in_exit=args.K_in_exit,
+            K_out_exit=args.K_out_exit,
+            eps_exit_um=args.eps_exit_um,
+            topology=args.topology,
+            N_chain_b=args.n_chain_b,
+        )
+        case = CaseConfig(
+            thermo=args.thermo,
+            h_conv=args.h,
+            T_wall=T0,
+            duration=args.duration,
+            n_pts=args.npts,
+            wall_model=args.wall_model,
+            wall_C_per_area=args.wall_C_per_area,
+            wall_h_out=args.wall_h_out,
+            wall_T_inf=args.wall_T_inf,
+            wall_emissivity=args.wall_emissivity,
+            wall_T_sur=args.wall_T_sur,
+            wall_q_flux=args.wall_q_flux,
+            external_model=args.external_model,
+            V_ext=args.V_ext,
+            T_ext=args.T_ext,
+            pump_speed_m3s=args.pump_speed_m3s,
+            P_ult_Pa=args.P_ult_Pa,
+        )
+        out = run_mc(
+            net_cfg,
+            case,
+            prof,
+            (lo_i, hi_i),
+            (lo_e, hi_e),
+            args.n_samples,
+            seed=args.seed,
+        )
+        write_mc_outputs(out, make_case_output_dir("mc"))
+        print(json.dumps(out["summary"], ensure_ascii=False, indent=2))
         return
     if args.cmd == "sweep":
         _run_one(args, args.d_int, args.d_exit)

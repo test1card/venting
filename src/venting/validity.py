@@ -4,9 +4,15 @@ import math
 
 import numpy as np
 
-from .constants import GAMMA, R_GAS, T_SAFE
-from .flow import friction_factor, mdot_short_tube_pos, mu_air_sutherland
-from .graph import EXT_NODE, ShortTubeEdge, SlotChannelEdge
+from .constants import D_MOL_AIR, GAMMA, K_BOLTZMANN, R_GAS, T_SAFE
+from .flow import (
+    fanno_choked_state,
+    friction_factor,
+    mdot_short_tube_pos,
+    mu_air_sutherland,
+)
+from .graph import EXT_NODE, OrificeEdge, ShortTubeEdge, SlotChannelEdge
+from .thermo import T_FIT_HIGH, T_FIT_LOW
 
 
 def _acoustic_flag(
@@ -31,6 +37,24 @@ def _acoustic_flag(
         "t_dynamic_min_s": t_dyn_min,
         "ratio_t_dyn_to_t_ac": ratio,
         "message": "0D pressure uniformity is stronger when ratio >> 1",
+    }
+
+
+def _thermo_range_flag(T: np.ndarray) -> dict:
+    t_min = float(np.min(T))
+    t_max = float(np.max(T))
+    in_range = (t_min >= T_FIT_LOW) and (t_max <= T_FIT_HIGH)
+    return {
+        "status": "ok" if in_range else "warning",
+        "T_min_K": t_min,
+        "T_max_K": t_max,
+        "fit_range": f"{T_FIT_LOW}-{T_FIT_HIGH} K",
+        "source": "NASA TM-4513 (1993), mixture-averaged",
+        "message": (
+            "Temperature remained inside NASA-7 fit range"
+            if in_range
+            else "Temperature left NASA-7 fit range; thermo accuracy may degrade"
+        ),
     }
 
 
@@ -93,6 +117,7 @@ def _short_tube_flag(
             "Cd_eff_min": float("nan"),
             "L_over_D": 0.0,
             "frac_fric": 0.0,
+            "Fanno_choke_fraction": 0.0,
         }
 
     re_max = 0.0
@@ -101,6 +126,8 @@ def _short_tube_flag(
     cd_eff_min = float("inf")
     l_over_d_worst = 0.0
     frac_fric_worst = 0.0
+    fanno_steps = 0
+    fanno_choked_steps = 0
 
     for e in short_tubes:
         a = node_index[e.a]
@@ -148,6 +175,23 @@ def _short_tube_flag(
             k_tot = e.K_in + e.K_out + k_fric
             cd_eff = 1.0 / math.sqrt(max(cd0 ** (-2.0) + k_tot, 1e-18))
 
+            if e.fanno:
+                fanno_steps += 1
+                choked, _ = fanno_choked_state(
+                    p_up,
+                    t_up,
+                    p_dn,
+                    cd0,
+                    e.A_total,
+                    e.D,
+                    e.L,
+                    e.eps,
+                    e.K_in,
+                    e.K_out,
+                )
+                if choked:
+                    fanno_choked_steps += 1
+
             re_max = max(re_max, Re)
             mach_max = max(mach_max, mach)
             if k_tot > k_tot_max:
@@ -175,6 +219,70 @@ def _short_tube_flag(
         "Cd_eff_min": cd_eff_min if np.isfinite(cd_eff_min) else float("nan"),
         "L_over_D": l_over_d_worst,
         "frac_fric": frac_fric_worst,
+        "Fanno_choke_fraction": (
+            float(fanno_choked_steps / fanno_steps) if fanno_steps else 0.0
+        ),
+    }
+
+
+def _knudsen_flag(
+    edges: list,
+    P: np.ndarray,
+    T: np.ndarray,
+    P_ext: np.ndarray,
+    node_index: dict[int, int],
+    t: np.ndarray,
+) -> dict:
+    kn_max = 0.0
+    edge_worst = ""
+    t_worst = 0.0
+    p_worst = 0.0
+    idxs = range(0, P.shape[1], 10)
+    for e in edges:
+        if not isinstance(e, (OrificeEdge, ShortTubeEdge)):
+            continue
+        d_char = (
+            e.D
+            if isinstance(e, ShortTubeEdge)
+            else math.sqrt(4.0 * e.A_total / math.pi)
+        )
+        a = node_index[e.a]
+        b = e.b if e.b == EXT_NODE else node_index[e.b]
+        for k in idxs:
+            pa = float(P[a, k])
+            pb = float(P_ext[k]) if b == EXT_NODE else float(P[b, k])
+            if pa >= pb:
+                p_up = pa
+                t_up = float(T[a, k])
+            else:
+                p_up = pb
+                t_up = float(T[a, k] if b == EXT_NODE else T[b, k])
+            p_up = max(p_up, 1e-9)
+            t_up = max(t_up, T_SAFE)
+            mfp = (
+                K_BOLTZMANN * t_up / (math.sqrt(2.0) * math.pi * (D_MOL_AIR**2) * p_up)
+            )
+            kn = mfp / max(d_char, 1e-12)
+            if kn > kn_max:
+                kn_max = kn
+                edge_worst = e.label or f"edge({e.a}->{e.b})"
+                t_worst = float(t[k])
+                p_worst = p_up
+
+    if kn_max < 0.01:
+        status, regime = "ok", "continuum"
+    elif kn_max < 0.1:
+        status, regime = "warning", "slip"
+    else:
+        status, regime = "fail", "transitional/free-molecular"
+    return {
+        "status": status,
+        "Kn_max": kn_max,
+        "edge_worst": edge_worst,
+        "t_worst_s": t_worst,
+        "P_at_worst_Pa": p_worst,
+        "regime": regime,
+        "message": "Continuum assumptions degrade as Knudsen number increases",
     }
 
 
@@ -218,8 +326,10 @@ def evaluate_validity_flags(
     flags = {
         "state_integrity": _state_flag(m, T),
         "acoustic_uniformity_0D": _acoustic_flag(P, T, t, l_char_m),
+        "thermo_fit_range": _thermo_range_flag(T),
         "slot_laminarity": _slot_laminar_flag(edges, P, T, node_index),
         "short_tube_flow": _short_tube_flag(edges, P, T, P_ext, node_index),
+        "knudsen_regime": _knudsen_flag(edges, P, T, P_ext, node_index, t),
     }
 
     max_ext = float(np.max(P_ext)) if P_ext.size else 0.0

@@ -40,4 +40,20 @@ def test_validity_flags_are_emitted_in_meta():
     assert "state_integrity" in flags
     assert "acoustic_uniformity_0D" in flags
     assert "external_pressure_units" in flags
+    assert "thermo_fit_range" in flags
+    assert "knudsen_regime" in flags
     assert flags["state_integrity"]["status"] in {"ok", "warning", "fail"}
+
+
+def test_knudsen_reference_values():
+    import math
+
+    from venting.constants import D_MOL_AIR, K_BOLTZMANN
+
+    def kn(p, t=300.0, d=2e-3):
+        lam = K_BOLTZMANN * t / (math.sqrt(2.0) * math.pi * (D_MOL_AIR**2) * p)
+        return lam / d
+
+    assert kn(101325.0) < 0.01
+    assert kn(1.0) >= 0.1
+    assert 0.01 <= kn(100.0) < 0.1

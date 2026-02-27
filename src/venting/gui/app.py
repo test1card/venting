@@ -71,7 +71,13 @@ def create_main_window():
                     self.progress.emit(payload)
 
                 sol = solve_case_stream(
-                    nodes, edges, bcs, case, callback=on_chunk, n_chunks=20
+                    nodes,
+                    edges,
+                    bcs,
+                    case,
+                    callback=on_chunk,
+                    dt_chunk_s=1.0,
+                    should_stop=lambda: self.stop_requested,
                 )
                 if self.stop_requested or not sol.success:
                     return
@@ -145,8 +151,12 @@ def create_main_window():
                 form.addRow(key, w)
 
             # required controls
-            add_combo("int_model", ["orifice", "short_tube"], self.cfg.int_model)
-            add_combo("exit_model", ["orifice", "short_tube"], self.cfg.exit_model)
+            add_combo(
+                "int_model", ["orifice", "short_tube", "fanno"], self.cfg.int_model
+            )
+            add_combo(
+                "exit_model", ["orifice", "short_tube", "fanno"], self.cfg.exit_model
+            )
             add_line("L_int_mm", self.cfg.L_int_mm)
             add_line("L_exit_mm", self.cfg.L_exit_mm)
             add_line("eps_int_um", self.cfg.eps_int_um)
@@ -295,7 +305,7 @@ def create_main_window():
         def on_progress(self, payload):
             t = payload["t"]
             y = payload["y"]
-            n_nodes = int(payload.get("n_nodes", 1))
+            n_nodes = int(payload.get("node_count", payload.get("n_nodes", 1)))
             layout = infer_layout_from_modes(
                 payload.get("thermo", "isothermal"),
                 payload.get("wall_model", "fixed"),

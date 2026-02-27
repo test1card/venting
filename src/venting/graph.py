@@ -49,6 +49,7 @@ class ShortTubeEdge:
     K_out: float
     Cd_model: CdConst
     label: str = ""
+    fanno: bool = False
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,7 @@ def _make_exit_edge(
 ) -> OrificeEdge | ShortTubeEdge:
     if cfg.exit_model == "orifice" or cfg.L_exit_mm <= 0.0:
         return OrificeEdge(a, EXT_NODE, A_exit_total, cd_exit, label=label)
+    fanno = cfg.exit_model == "fanno"
     d = cfg.d_exit_mm * 1e-3
     length = cfg.L_exit_mm * 1e-3
     k_in = float(cfg.K_in_exit if cfg.K_in_exit is not None else cfg.K_in)
@@ -107,6 +109,7 @@ def _make_exit_edge(
         K_out=k_out,
         Cd_model=cd_exit,
         label=label,
+        fanno=fanno,
     )
 
 
@@ -127,6 +130,7 @@ def _make_int_edge(
     cd_model = CdConst(cd_int)
     if cfg.int_model == "orifice" or l_int_mm <= 0.0:
         return OrificeEdge(a, b, A_int_total, cd_model, label=label)
+    fanno = cfg.int_model == "fanno"
     return ShortTubeEdge(
         a=a,
         b=b,
@@ -138,6 +142,7 @@ def _make_int_edge(
         K_out=k_out,
         Cd_model=cd_model,
         label=label,
+        fanno=fanno,
     )
 
 
@@ -324,10 +329,10 @@ def _build_two_chain_shared_vest(
 def build_branching_network(
     cfg: NetworkConfig, profile: Profile
 ) -> tuple[list[GasNode], list[Edge], list[ExternalBC]]:
-    if cfg.int_model not in {"orifice", "short_tube"}:
-        raise ValueError("int_model must be 'orifice' or 'short_tube'")
-    if cfg.exit_model not in {"orifice", "short_tube"}:
-        raise ValueError("exit_model must be 'orifice' or 'short_tube'")
+    if cfg.int_model not in {"orifice", "short_tube", "fanno"}:
+        raise ValueError("int_model must be 'orifice', 'short_tube', or 'fanno'")
+    if cfg.exit_model not in {"orifice", "short_tube", "fanno"}:
+        raise ValueError("exit_model must be 'orifice', 'short_tube', or 'fanno'")
 
     if cfg.topology == "single_chain":
         return _build_single_chain(cfg, profile)

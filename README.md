@@ -276,5 +276,8 @@ What GUI supports:
 - background solve with live plot updates, stop button, validity table,
 - case JSON save/load (explicit units),
 - artifact export compatible with CLI (`npz`, `meta.json`, `*_validity.json`, `summary.csv`).
+- GUI progress uses chunked integration when streaming is enabled; tiny differences vs batch solve can appear within integrator tolerances.
 
 Packaging executable for a target OS is left as TODO until `{TARGET_OS}` and `{PACKAGING_TOOL}` are specified.
+
+GUI streaming uses chunked integration for progress updates; results can differ slightly from a single batch solve within integrator tolerances.
