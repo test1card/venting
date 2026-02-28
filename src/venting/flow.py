@@ -261,8 +261,11 @@ def _fanno_state(
     p1_final = P_up / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution) ** (
         gamma / (gamma - 1.0)
     )
-    mdot = p1_final * m1_solution * a_eff * math.sqrt(
-        gamma / (r_gas * max(t1_final, T_SAFE))
+    mdot = (
+        p1_final
+        * m1_solution
+        * a_eff
+        * math.sqrt(gamma / (r_gas * max(t1_final, T_SAFE)))
     )
     return {
         "mdot": max(mdot, 0.0),
