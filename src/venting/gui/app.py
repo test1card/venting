@@ -262,6 +262,7 @@ def create_main_window():
                 - {
                     "int_model",
                     "exit_model",
+                    "topology",
                     "external_model",
                     "profile_kind",
                     "profile_pressure_unit",
