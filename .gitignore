@@ -8,3 +8,5 @@ results/
 *.npz
 *_meta.json
 *.egg-info/
+.coverage
+htmlcov/
