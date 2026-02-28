@@ -2,16 +2,19 @@ name: Build Windows EXE
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -25,21 +28,35 @@ jobs:
           pip install -e ".[gui]"
           pip install pyinstaller
 
-      - name: Build
+      - name: Build EXE
         run: python build_windows.py
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: venting-windows
-          path: dist/venting.exe
-          retention-days: 30
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$("${{ github.sha }}".Substring(0,7))" >> $env:GITHUB_OUTPUT
+        shell: powershell
+
+      - name: Delete existing latest release if exists
+        run: |
+          gh release delete latest --yes 2>$null || true
+          git push origin :refs/tags/latest 2>$null || true
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: latest
+          name: "Latest build (${{ steps.sha.outputs.short }})"
+          body: |
+            Automatic build from `main` branch.
+            Commit: ${{ github.sha }}
+
+            **Download:** `venting.exe` from Assets below.
+            Runs without installing Python.
           files: dist/venting.exe
-          generate_release_notes: true
+          prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
