@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Сборка venting.exe. Запуск: python build_windows.py"""
+"""Build venting.exe. Run: python build_windows.py"""
 
 import shutil
 import subprocess
@@ -18,7 +18,7 @@ def main():
     check("PyInstaller")
     upx = bool(shutil.which("upx"))
     if not upx:
-        print("UPX не найден — exe будет крупнее. https://github.com/upx/upx/releases")
+        print("UPX not found -- exe will be larger. https://github.com/upx/upx/releases")
 
     for d in ["build", "dist"]:
         if Path(d).exists():
@@ -41,10 +41,10 @@ def main():
 
     exe = Path("dist/venting.exe")
     if exe.exists():
-        print(f"\nГОТОВО: dist/venting.exe  ({exe.stat().st_size / 1e6:.0f} МБ)")
-        print("Файл работает без установки Python — можно отправлять.")
+        print(f"\nDONE: dist/venting.exe  ({exe.stat().st_size / 1e6:.0f} MB)")
+        print("The file runs without installing Python -- ready to distribute.")
     else:
-        print("ОШИБКА: dist/venting.exe не создан")
+        print("ERROR: dist/venting.exe was not created")
         sys.exit(1)
 
 
