@@ -38,9 +38,9 @@ jobs:
 
       - name: Delete existing latest release if exists
         run: |
-          gh release delete latest --yes 2>$null || true
-          git push origin :refs/tags/latest 2>$null || true
-        shell: powershell
+          gh release delete latest --yes 2>$null || $true
+          git push origin :refs/tags/latest 2>$null || $true
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
