@@ -89,7 +89,9 @@ $$
 
 Режимы:
 - `isothermal`: `T = const`, решается только масса.
-- `intermediate`: решаются `m(t), T(t)`; при `h→0` поведение стремится к адиабатическому blowdown, при `h→∞` — к изотерме.
+- `intermediate`: решаются `m(t), T(t)` с постоянными `cp/cv`; при `h→0` поведение стремится к адиабатическому blowdown, при `h→∞` — к изотерме.
+- `variable`: переменная `T`, `cp(T)` и `cv(T)` по NASA-7 полиному для сухого воздуха
+  (McBride, Gordon, Reno, NASA TM-4513, 1993), диапазон 200–1000 К.
 
 > Важно: в формулах расхода и энергетики используется **upstream temperature** из состояния узла.
 
@@ -118,20 +120,29 @@ $$
 - `geometry.py` — конвертация единиц, геометрические helper'ы.
 - `profiles.py` — профили `P_ext(t)` (`linear/step/barometric/table`) и события profile-breakpoints.
 - `graph.py` — узлы/рёбра/BC, построение сети `build_branching_network`.
-- `flow.py` — расход через orifice и slot.
-- `solver.py` — ODE RHS, `solve_ivp(method="Radau")`, события остановки, sparsity.
+- `flow.py` — расход через orifice, short_tube и Fanno-течение.
+- `solver.py` — ODE RHS, `solve_ivp(method="Radau")`, события остановки, `_prepare_solve`.
 - `diagnostics.py` — `ΔP`, пики, режимы, `tau_exit`, meta.
 - `gates.py` — встроенные gate checks (single-node / two-node).
 - `io.py` — единообразная запись `run.json`, `summary.csv`, meta.
-- `plotting.py` — опциональные графики.
+- `plotting.py` — опциональные графики (Agg backend).
 - `cli.py` / `__main__.py` — CLI и точка входа `python -m venting`.
+- `cases.py` — замороженные датаклассы `CaseConfig`, `NetworkConfig`, `SolveResult`.
+- `thermo.py` — NASA-7 полиномы `cp(T)`, `cv(T)`, `γ(T)`, `h(T)`, `u(T)` для воздуха; формула Сазерленда для μ.
+- `state_layout.py` — нарезка вектора состояния ODE (индексы m, T, T_wall).
+- `validity.py` — 7 флагов применимости модели (acoustic_uniformity, knudsen_regime и др.).
+- `montecarlo.py` — Monte Carlo sweep по Cd, возвращает p5/p50/p95 по каждому ребру.
+- `compare.py` — сравнение двух runs по `summary.csv`.
+- `presets.py` — preset параметров панели (`get_default_panel_preset_v9`).
+- `run.py` — высокоуровневый пайплайн выполнения кейса.
+- `gui/` — подпакет с `app.py`, `config.py`, `main.py`, `state_layout.py` (опционально, требует PySide6).
 
 ---
 
 ## 7) Численный решатель
 
 - используется `scipy.integrate.solve_ivp`, метод **Radau** (жёсткие ODE),
-- учитывается sparsity-структура,
+- Radau использует автоматическое численное дифференцирование Якобиана; явная sparsity-структура не задаётся,
 - используются события ранней остановки (например, близость к внешнему давлению/низкое давление),
 - **state clipping для P/T не используется**; есть только safety-защита знаменателей (`T_SAFE`, малые массы в делении).
 
@@ -196,6 +207,13 @@ python -m venting sweep --profile linear --d-int 2 --d-exit 2 --cd-int 0.62 --cd
 python -m venting thermal --profile linear --d 2 --h-list 0,1,5,15
 python -m venting sweep2d --profile linear --d-int-list 1.5,2.0 --d-exit-list 1.5,2.0
 python -m venting sweep --profile linear --d-int 2 --d-exit 4 --int-model short_tube --L-int-mm 1 --exit-model short_tube --L-exit-mm 1 --K-in-int 0.5 --K-out-int 1.0 --eps-int-um 0 --K-in-exit 0.5 --K-out-exit 1.0 --eps-exit-um 0 --cd-int 0.62 --cd-exit 0.62 --thermo variable --wall-model lumped --external-model dynamic_pump --pump-speed-m3s 0.01 --V-ext 0.2 --P-ult-Pa 10
+
+# Monte Carlo sweep по неопределённости Cd
+python -m venting mc --profile linear --d-int 2 --d-exit 2 \
+    --cd-int-range 0.5,0.7 --cd-exit-range 0.55,0.65 --n-samples 200
+
+# Сравнение двух запусков
+python -m venting compare results/run_a/ results/run_b/ --output comparison.csv
 ```
 
 Профиль `table` ожидает CSV с колонками `t_s,P_Pa` через `--profile-file`.
@@ -228,14 +246,29 @@ results/<timestamp>_<case>/
 
 ## 11) Limitations & red flags
 
-Дополнительно для short-tube: это **lossy-nozzle** через эффективный `Cd_eff`; Fanno/friction-choking в v10.0.0 не реализован.
-
-
+Для `int_model = "fanno"` / `exit_model = "fanno"` реализовано полное Fanno-течение
+с учётом friction choking (Shapiro 1953, Ch. 6). Модель итерирует по Re для
+согласованного расчёта f_D и числа Маха на входе/выходе канала.
+`short_tube` использует упрощённую модель через эффективный Cd_eff без Fanno-choking.
 
 - Это **не** CFD и не замена стендовым испытаниям.
 - `C_d` — главный источник неопределённости → обязательно делать sweep по `C_d`/геометрии.
 - Изотермический случай не «всегда консервативен» для любой метрики и любого момента времени.
 - Если видите странные осцилляции/нефизичные тренды — сначала проверяйте gate tests.
+
+---
+
+## Известные ограничения и особенности реализации
+
+- **Уравнение состояния — идеальный газ**: для воздуха при T > 200 К и P < 10 МПа
+  погрешность < 1%. Для криогенных температур (< 100 К) модель неприменима.
+- **NASA-7 полином** в `thermo="variable"` валиден для 200–1000 К;
+  при выходе за диапазон код продолжает работу с предупреждением в validity flags.
+- **Cd — постоянный параметр**: зависимость Cd от Re и числа Маха не учитывается.
+  Основной источник неопределённости — делать sweep или MC.
+- **`solve_case_stream` даёт незначительно другие результаты** чем `solve_case`
+  из-за кусочного интегрирования и финальной интерполяции (погрешность в пределах
+  rtol/atol солвера).
 
 ---
 
@@ -269,15 +302,30 @@ python -m venting gui
 ```
 
 What GUI supports:
-- orifice vs short_tube for internal/exit edges (L, eps, K_in/K_out),
+- orifice, short_tube и fanno модели для внутренних/выходных рёбер (L, eps, K_in/K_out, friction choking),
 - network and geometry controls (`N_chain`, `N_par`, volumes, wall areas, diameters/counts, Cd),
+- топология `two_chain_shared_vest` (две цепочки с общим вестибюлем),
 - external model (`profile` / `dynamic_pump`),
 - thermo (`isothermal` / `intermediate` / `variable`) and wall model (`fixed` / `lumped`),
-- background solve with live plot updates, stop button, validity table,
+- live progress bar во время расчёта,
+- графики всех узлов одновременно с цветовой легендой (до 8 узлов),
+- цветовая индикация validity flags (ok/warning/fail),
+- история последних 10 запусков с быстрой загрузкой параметров,
+- drag-and-drop CSV файла для профиля давления,
+- background solve with stop button, validity table,
 - case JSON save/load (explicit units),
 - artifact export compatible with CLI (`npz`, `meta.json`, `*_validity.json`, `summary.csv`).
-- GUI progress uses chunked integration when streaming is enabled; tiny differences vs batch solve can appear within integrator tolerances.
-
-Packaging executable for a target OS is left as TODO until `{TARGET_OS}` and `{PACKAGING_TOOL}` are specified.
 
 GUI streaming uses chunked integration for progress updates; results can differ slightly from a single batch solve within integrator tolerances.
+
+### Готовый .exe для Windows
+
+Скачать последнюю версию: [Releases](../../releases)
+
+Или собрать самостоятельно:
+
+```bash
+pip install pyinstaller
+python build_windows.py
+# Результат: dist/venting.exe (~180 МБ, работает без Python)
+```

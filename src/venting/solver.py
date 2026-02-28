@@ -297,178 +297,17 @@ def build_rhs(
     return rhs, n_vars
 
 
-def solve_case(
-    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
-):
-    nodes_local = list(nodes)
-    edges_local = list(edges)
-    bcs_local = list(bcs)
-    ext_idx = None
-
-    if case.external_model == "dynamic_pump":
-        ext_idx = len(nodes_local)
-        nodes_local.append(GasNode("external", case.V_ext, 0.0))
-        rewired = []
-        for e in edges_local:
-            if isinstance(e, OrificeEdge) and e.b == EXT_NODE:
-                rewired.append(
-                    OrificeEdge(e.a, ext_idx, e.A_total, e.Cd_model, label=e.label)
-                )
-            elif isinstance(e, ShortTubeEdge) and e.b == EXT_NODE:
-                rewired.append(
-                    ShortTubeEdge(
-                        e.a,
-                        ext_idx,
-                        e.A_total,
-                        e.D,
-                        e.L,
-                        e.eps,
-                        e.K_in,
-                        e.K_out,
-                        e.Cd_model,
-                        label=e.label,
-                        fanno=e.fanno,
-                    )
-                )
-            else:
-                rewired.append(e)
-        edges_local = rewired
-        bcs_local = []
-
-    N = len(nodes_local)
-    V = np.array([n.V for n in nodes_local], dtype=float)
-    rhs_core, n_vars = build_rhs(nodes_local, edges_local, bcs_local, case)
-
-    m0 = P0 * V / (R_GAS * T0)
-    if ext_idx is not None:
-        m0[ext_idx] = max(case.P_ult_Pa, 10.0) * V[ext_idx] / (R_GAS * case.T_ext)
-
-    if case.thermo == "isothermal":
-        y0 = m0.copy()
-    else:
-        T_init = np.full(N, T0)
-        if ext_idx is not None:
-            T_init[ext_idx] = case.T_ext
-        y0 = np.concatenate([m0, T_init])
-        if case.wall_model == "lumped":
-            y0 = np.concatenate([y0, np.full(N, case.T_wall)])
-
-    t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
-
-    profile = bcs_local[0].profile if bcs_local else None
-
-    def p_from_state(y: np.ndarray) -> np.ndarray:
-        m = y[:N]
-        if case.thermo == "isothermal":
-            T = np.full(N, T0)
-            if ext_idx is not None:
-                T[ext_idx] = case.T_ext
-        else:
-            T = np.maximum(y[N : 2 * N], T_SAFE)
-            if ext_idx is not None:
-                T[ext_idx] = case.T_ext
-        return np.maximum(m, 0.0) * R_GAS * T / V
-
-    def rhs(t: float, y: np.ndarray) -> np.ndarray:
-        dy = rhs_core(t, y)
-        if ext_idx is not None:
-            P = p_from_state(y)
-            mdot_pump = (
-                case.pump_speed_m3s
-                * max(P[ext_idx] - case.P_ult_Pa, 0.0)
-                / (R_GAS * max(case.T_ext, T_SAFE))
-            )
-            dy[ext_idx] -= mdot_pump
-            if case.thermo != "isothermal":
-                dy[N + ext_idx] = 0.0
-        return dy
-
-    events = []
-    for i in range(N):
-
-        def ev_mi(t, y, ii=i):
-            return y[ii] + 1e-15
-
-        ev_mi.terminal = True
-        ev_mi.direction = -1
-        events.append(ev_mi)
-
-    def ev_equil_rms(t, y):
-        P = p_from_state(y)
-        if ext_idx is not None:
-            Pe = P[ext_idx]
-            Pcmp = np.delete(P, ext_idx)
-        else:
-            Pe = profile.P(float(t))
-            Pcmp = P
-        return float(np.sqrt(np.mean((Pcmp - Pe) ** 2))) - case.p_rms_tol
-
-    ev_equil_rms.terminal = True
-    ev_equil_rms.direction = -1
-    events.append(ev_equil_rms)
-
-    def ev_p_stop(t, y):
-        P = p_from_state(y)
-        if ext_idx is not None:
-            Pe = P[ext_idx]
-            Pcmp = np.delete(P, ext_idx)
-        else:
-            Pe = profile.P(float(t))
-            Pcmp = P
-        return max(np.max(Pcmp) - case.p_stop, Pe - 10.0)
-
-    ev_p_stop.terminal = True
-    ev_p_stop.direction = -1
-    events.append(ev_p_stop)
-
-    A_max = 0.0
-    Cd_max = 0.0
-    for e in edges_local:
-        if isinstance(e, (OrificeEdge, ShortTubeEdge)):
-            A_max = max(A_max, e.A_total)
-            Cd_max = max(Cd_max, e.Cd_model())
-    V_min = float(np.min(V))
-    mdot_ch = (
-        Cd_max * A_max * C_CHOKED * P0 / math.sqrt(R_GAS * T0) if A_max > 0 else 0.0
-    )
-    tau_min = (V_min * P0) / (R_GAS * T0 * mdot_ch) if mdot_ch > 0 else 1.0
-    max_step = max(min(case.duration / 2000.0, tau_min / 10.0), 1e-4)
-
-    sol = solve_ivp(
-        rhs,
-        (0.0, case.duration),
-        y0,
-        method="Radau",
-        t_eval=t_eval,
-        rtol=1e-7 if case.thermo == "isothermal" else 1e-6,
-        atol=1e-10 if case.thermo == "isothermal" else 1e-8,
-        max_step=max_step,
-        events=events,
-    )
-    sol.ext_idx = ext_idx
-    sol.node_count = len(nodes_local)
-    sol.nodes_local = nodes_local
-    sol.edges_local = edges_local
-    sol.bcs_local = bcs_local
-    return sol
-
-
-def solve_case_stream(
+def _prepare_solve(
     nodes: list[GasNode],
     edges: list,
     bcs: list[ExternalBC],
     case: CaseConfig,
-    callback=None,
-    n_chunks: int | None = None,
-    dt_chunk_s: float = 2.0,
-    should_stop=None,
-    stop_check=None,
-):
-    """True streaming solve via piecewise integration segments."""
-    if should_stop is None and stop_check is not None:
-        should_stop = stop_check
-    if callback is None and should_stop is None:
-        return solve_case(nodes, edges, bcs, case)
+) -> dict:
+    """
+    Common setup for solve_case and solve_case_stream.
+    Returns dict: nodes_local, edges_local, bcs_local, ext_idx,
+                  N, V, y0, rhs, p_from_state, max_step, t_eval
+    """
     nodes_local = list(nodes)
     edges_local = list(edges)
     bcs_local = list(bcs)
@@ -513,33 +352,31 @@ def solve_case_stream(
         m0[ext_idx] = max(case.P_ult_Pa, 10.0) * V[ext_idx] / (R_GAS * case.T_ext)
 
     if case.thermo == "isothermal":
-        y = m0.copy()
+        y0 = m0.copy()
     else:
         T_init = np.full(N, T0)
         if ext_idx is not None:
             T_init[ext_idx] = case.T_ext
-        y = np.concatenate([m0, T_init])
+        y0 = np.concatenate([m0, T_init])
         if case.wall_model == "lumped":
-            y = np.concatenate([y, np.full(N, case.T_wall)])
+            y0 = np.concatenate([y0, np.full(N, case.T_wall)])
 
-    t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
-
-    def p_from_state(y_state: np.ndarray) -> np.ndarray:
-        m = y_state[:N]
+    def p_from_state(y: np.ndarray) -> np.ndarray:
+        m = y[:N]
         if case.thermo == "isothermal":
             T = np.full(N, T0)
             if ext_idx is not None:
                 T[ext_idx] = case.T_ext
         else:
-            T = np.maximum(y_state[N : 2 * N], T_SAFE)
+            T = np.maximum(y[N : 2 * N], T_SAFE)
             if ext_idx is not None:
                 T[ext_idx] = case.T_ext
         return np.maximum(m, 0.0) * R_GAS * T / V
 
-    def rhs(t: float, y_state: np.ndarray) -> np.ndarray:
-        dy = rhs_core(t, y_state)
+    def rhs(t: float, y: np.ndarray) -> np.ndarray:
+        dy = rhs_core(t, y)
         if ext_idx is not None:
-            P = p_from_state(y_state)
+            P = p_from_state(y)
             mdot_pump = (
                 case.pump_speed_m3s
                 * max(P[ext_idx] - case.P_ult_Pa, 0.0)
@@ -550,8 +387,7 @@ def solve_case_stream(
                 dy[N + ext_idx] = 0.0
         return dy
 
-    A_max = 0.0
-    Cd_max = 0.0
+    A_max, Cd_max = 0.0, 0.0
     for e in edges_local:
         if isinstance(e, (OrificeEdge, ShortTubeEdge)):
             A_max = max(A_max, e.A_total)
@@ -562,6 +398,123 @@ def solve_case_stream(
     )
     tau_min = (V_min * P0) / (R_GAS * T0 * mdot_ch) if mdot_ch > 0 else 1.0
     max_step = max(min(case.duration / 2000.0, tau_min / 10.0), 1e-4)
+    t_eval = np.linspace(0.0, case.duration, int(case.n_pts))
+
+    return dict(
+        nodes_local=nodes_local,
+        edges_local=edges_local,
+        bcs_local=bcs_local,
+        ext_idx=ext_idx,
+        N=N,
+        V=V,
+        y0=y0,
+        rhs=rhs,
+        p_from_state=p_from_state,
+        max_step=max_step,
+        t_eval=t_eval,
+    )
+
+
+def solve_case(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
+    ctx = _prepare_solve(nodes, edges, bcs, case)
+    nodes_local = ctx["nodes_local"]
+    edges_local = ctx["edges_local"]
+    bcs_local = ctx["bcs_local"]
+    ext_idx = ctx["ext_idx"]
+    N = ctx["N"]
+    rhs = ctx["rhs"]
+    p_from_state = ctx["p_from_state"]
+    y0 = ctx["y0"]
+    max_step = ctx["max_step"]
+    t_eval = ctx["t_eval"]
+
+    profile = bcs_local[0].profile if bcs_local else None
+
+    events = []
+    for i in range(N):
+
+        def ev_mi(t, y, ii=i):
+            return y[ii] + 1e-15
+
+        ev_mi.terminal = True
+        ev_mi.direction = -1
+        events.append(ev_mi)
+
+    def ev_equil_rms(t, y):
+        P = p_from_state(y)
+        if ext_idx is not None:
+            Pe = P[ext_idx]
+            Pcmp = np.delete(P, ext_idx)
+        else:
+            Pe = profile.P(float(t))
+            Pcmp = P
+        return float(np.sqrt(np.mean((Pcmp - Pe) ** 2))) - case.p_rms_tol
+
+    ev_equil_rms.terminal = True
+    ev_equil_rms.direction = -1
+    events.append(ev_equil_rms)
+
+    def ev_p_stop(t, y):
+        P = p_from_state(y)
+        if ext_idx is not None:
+            Pe = P[ext_idx]
+            Pcmp = np.delete(P, ext_idx)
+        else:
+            Pe = profile.P(float(t))
+            Pcmp = P
+        return max(np.max(Pcmp) - case.p_stop, Pe - 10.0)
+
+    ev_p_stop.terminal = True
+    ev_p_stop.direction = -1
+    events.append(ev_p_stop)
+
+    sol = solve_ivp(
+        rhs,
+        (0.0, case.duration),
+        y0,
+        method="Radau",
+        t_eval=t_eval,
+        rtol=1e-7 if case.thermo == "isothermal" else 1e-6,
+        atol=1e-10 if case.thermo == "isothermal" else 1e-8,
+        max_step=max_step,
+        events=events,
+    )
+    sol.ext_idx = ext_idx
+    sol.node_count = len(nodes_local)
+    sol.nodes_local = nodes_local
+    sol.edges_local = edges_local
+    sol.bcs_local = bcs_local
+    return sol
+
+
+def solve_case_stream(
+    nodes: list[GasNode],
+    edges: list,
+    bcs: list[ExternalBC],
+    case: CaseConfig,
+    callback=None,
+    n_chunks: int | None = None,
+    dt_chunk_s: float = 2.0,
+    should_stop=None,
+    stop_check=None,
+):
+    """True streaming solve via piecewise integration segments."""
+    if should_stop is None and stop_check is not None:
+        should_stop = stop_check
+    if callback is None and should_stop is None:
+        return solve_case(nodes, edges, bcs, case)
+    ctx = _prepare_solve(nodes, edges, bcs, case)
+    nodes_local = ctx["nodes_local"]
+    edges_local = ctx["edges_local"]
+    bcs_local = ctx["bcs_local"]
+    ext_idx = ctx["ext_idx"]
+    N = ctx["N"]
+    rhs = ctx["rhs"]
+    t_eval = ctx["t_eval"]
+    max_step = ctx["max_step"]
+    y = ctx["y0"].copy()
 
     if n_chunks is not None:
         effective_n_chunks = max(int(n_chunks), 1)

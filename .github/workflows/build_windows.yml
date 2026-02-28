@@ -1,0 +1,45 @@
+name: Build Windows EXE
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UPX
+        run: choco install upx -y
+        shell: powershell
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui]"
+          pip install pyinstaller
+
+      - name: Build
+        run: python build_windows.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venting-windows
+          path: dist/venting.exe
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/venting.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
