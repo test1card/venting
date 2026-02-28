@@ -18,7 +18,9 @@ def main():
     check("PyInstaller")
     upx = bool(shutil.which("upx"))
     if not upx:
-        print("UPX not found -- exe will be larger. https://github.com/upx/upx/releases")
+        print(
+            "UPX not found -- exe will be larger. https://github.com/upx/upx/releases"
+        )
 
     for d in ["build", "dist"]:
         if Path(d).exists():
