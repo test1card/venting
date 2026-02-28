@@ -141,15 +141,18 @@ def test_fanno_zero_length_matches_orifice():
 
 
 def test_fanno_low_mach_matches_lossy_nozzle():
+    # At low Mach with K=0, Fanno reduces to the orifice/lossy-nozzle result.
+    # With K_in/K_out != 0 the two models intentionally diverge (equivalent-length
+    # vs lumped-Cd approximations), so this test uses K=0 for the agreement check.
     p_up = 101325.0
     p_dn = 0.9 * p_up
     t_up = 300.0
     cd0 = 0.62
     area = circle_area_from_d_mm(2.0)
     diam = 2.0e-3
-    m_fanno = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
+    m_fanno = mdot_fanno_tube(p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.0, 0.0)
     m_lossy = mdot_short_tube_pos(
-        p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0
+        p_up, t_up, p_dn, cd0, area, diam, 3e-3, 0.0, 0.0, 0.0
     )
     assert abs(m_fanno - m_lossy) / max(m_lossy, 1e-20) < 0.05
 
@@ -199,7 +202,7 @@ def test_fanno_with_K_below_lossy():
         f"Fanno with K should give LESS flow than lossy nozzle: "
         f"fanno={m_fanno:.6f}, lossy={m_lossy:.6f}"
     )
-    assert m_fanno / m_lossy < 1.0
+    assert m_fanno / m_lossy < 0.92
 
 
 def test_fanno_monotonic_with_K():
@@ -213,5 +216,5 @@ def test_fanno_monotonic_with_K():
     prev = 0.0
     for r in [0.99, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]:
         m = mdot_fanno_tube(p_up, t_up, r * p_up, cd0, area, diam, 3e-3, 0.0, 0.5, 1.0)
-        assert m >= 0.98 * prev - 1e-12, f"Non-monotonic at r={r}: {m} < {prev}"
+        assert m >= prev - 1e-12, f"Non-monotonic at r={r}: {m} < {prev}"
         prev = m

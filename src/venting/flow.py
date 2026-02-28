@@ -179,23 +179,6 @@ def _fanno_state(
         md = mdot_orifice_pos_props(P_up, t_eff, P_dn, Cd0, A_total, gamma, r_gas)
         return {"mdot": md, "choked": False, "mach_exit": 0.0, "f_D": 0.0}
 
-    if max(P_dn, 0.0) / P_up >= 0.6:
-        md = mdot_short_tube_pos(
-            P_up,
-            t_eff,
-            P_dn,
-            Cd0,
-            A_total,
-            D,
-            L,
-            eps,
-            K_in,
-            K_out,
-            gamma,
-            r_gas,
-        )
-        return {"mdot": md, "choked": False, "mach_exit": 0.0, "f_D": 0.0}
-
     a_eff = Cd0 * A_total
     re_guess = 1e5
     m1_solution = 0.1
@@ -241,10 +224,7 @@ def _fanno_state(
             p1 = P_up / (1.0 + 0.5 * (gamma - 1.0) * m1 * m1) ** (gamma / (gamma - 1.0))
             t1 = t_eff / (1.0 + 0.5 * (gamma - 1.0) * m1 * m1)
             p2 = p1 * (_p_over_pstar(m2, gamma) / _p_over_pstar(m1, gamma))
-            p_out = p2 / (1.0 + K_out)
-            if K_in > 0.0:
-                p_out /= 1.0 + K_in
-            return p_out, t1, choked
+            return p2, t1, choked
 
         p_cap, _t1_cap, _ = outlet_pressure(m1_cap)
         if max(P_dn, 0.0) <= p_cap:
@@ -265,7 +245,10 @@ def _fanno_state(
             m2_solution, choked_solution = _solve_m2_from_m1(m1_solution, f4ld, gamma)
 
         t1 = t_eff / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution)
-        mdot = P_up * m1_solution * a_eff * math.sqrt(gamma / (r_gas * max(t1, T_SAFE)))
+        p1 = P_up / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution) ** (
+            gamma / (gamma - 1.0)
+        )
+        mdot = p1 * m1_solution * a_eff * math.sqrt(gamma / (r_gas * max(t1, T_SAFE)))
         rho1 = P_up / (r_gas * max(t_eff, T_SAFE))
         u1 = mdot / max(rho1 * A_total, 1e-18)
         re_new = rho1 * u1 * D / max(mu_air_sutherland(t_eff), 1e-18)
@@ -274,20 +257,15 @@ def _fanno_state(
             break
         re_guess = 0.5 * re_guess + 0.5 * re_new
 
+    t1_final = t_eff / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution)
+    p1_final = P_up / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution) ** (
+        gamma / (gamma - 1.0)
+    )
     mdot = (
-        P_up
+        p1_final
         * m1_solution
         * a_eff
-        * math.sqrt(
-            gamma
-            / (
-                r_gas
-                * max(
-                    t_eff / (1.0 + 0.5 * (gamma - 1.0) * m1_solution * m1_solution),
-                    T_SAFE,
-                )
-            )
-        )
+        * math.sqrt(gamma / (r_gas * max(t1_final, T_SAFE)))
     )
     return {
         "mdot": max(mdot, 0.0),
@@ -338,10 +316,7 @@ def mdot_fanno_tube(
     )
     if md_f < 1e-3 * max(md_l, 1e-18):
         md_f = md_l
-    md = min(md_f, md_l)
-    if P_up > 0 and (P_dn / P_up) <= 0.5:
-        md = min(md_l, max(md, 0.99 * md_l))
-    return md
+    return min(md_f, md_l)
 
 
 def fanno_choked_state(
