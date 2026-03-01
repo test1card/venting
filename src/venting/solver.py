@@ -72,7 +72,15 @@ def _property_model(thermo: str):
             lambda T: C_P * T,
             lambda T: C_V * T,
         )
-    raise ValueError("Property model valid for 'intermediate' or 'variable'")
+    if thermo == "isothermal":
+        raise ValueError(
+            "_property_model should not be called for 'isothermal' mode; "
+            "isothermal is handled separately in build_rhs"
+        )
+    raise ValueError(
+        f"Unknown thermo mode {thermo!r}; "
+        "expected 'isothermal', 'intermediate', or 'variable'"
+    )
 
 
 def build_rhs(
@@ -415,23 +423,8 @@ def _prepare_solve(
     )
 
 
-def solve_case(
-    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
-):
-    ctx = _prepare_solve(nodes, edges, bcs, case)
-    nodes_local = ctx["nodes_local"]
-    edges_local = ctx["edges_local"]
-    bcs_local = ctx["bcs_local"]
-    ext_idx = ctx["ext_idx"]
-    N = ctx["N"]
-    rhs = ctx["rhs"]
-    p_from_state = ctx["p_from_state"]
-    y0 = ctx["y0"]
-    max_step = ctx["max_step"]
-    t_eval = ctx["t_eval"]
-
-    profile = bcs_local[0].profile if bcs_local else None
-
+def _build_events(N, p_from_state, ext_idx, profile, case):
+    """Build terminal events shared by solve_case and solve_case_stream."""
     events = []
     for i in range(N):
 
@@ -469,6 +462,26 @@ def solve_case(
     ev_p_stop.terminal = True
     ev_p_stop.direction = -1
     events.append(ev_p_stop)
+    return events
+
+
+def solve_case(
+    nodes: list[GasNode], edges: list, bcs: list[ExternalBC], case: CaseConfig
+):
+    ctx = _prepare_solve(nodes, edges, bcs, case)
+    nodes_local = ctx["nodes_local"]
+    edges_local = ctx["edges_local"]
+    bcs_local = ctx["bcs_local"]
+    ext_idx = ctx["ext_idx"]
+    N = ctx["N"]
+    rhs = ctx["rhs"]
+    p_from_state = ctx["p_from_state"]
+    y0 = ctx["y0"]
+    max_step = ctx["max_step"]
+    t_eval = ctx["t_eval"]
+
+    profile = bcs_local[0].profile if bcs_local else None
+    events = _build_events(N, p_from_state, ext_idx, profile, case)
 
     sol = solve_ivp(
         rhs,
@@ -512,9 +525,13 @@ def solve_case_stream(
     ext_idx = ctx["ext_idx"]
     N = ctx["N"]
     rhs = ctx["rhs"]
+    p_from_state = ctx["p_from_state"]
     t_eval = ctx["t_eval"]
     max_step = ctx["max_step"]
     y = ctx["y0"].copy()
+
+    profile = bcs_local[0].profile if bcs_local else None
+    events = _build_events(N, p_from_state, ext_idx, profile, case)
 
     if n_chunks is not None:
         effective_n_chunks = max(int(n_chunks), 1)
@@ -548,11 +565,19 @@ def solve_case_stream(
             rtol=1e-7 if case.thermo == "isothermal" else 1e-6,
             atol=1e-10 if case.thermo == "isothermal" else 1e-8,
             max_step=max_step,
+            events=events,
         )
         if not sol_seg.success:
             success = False
             message = str(sol_seg.message)
             break
+
+        terminated = False
+        if hasattr(sol_seg, "t_events"):
+            for ev_t in sol_seg.t_events:
+                if ev_t is not None and len(ev_t) > 0:
+                    terminated = True
+                    break
 
         seg_t = sol_seg.t
         seg_y = sol_seg.y
@@ -572,7 +597,7 @@ def solve_case_stream(
                     "t": t_cat,
                     "y": y_cat,
                     "progress": float((i + 1) / effective_n_chunks),
-                    "done": bool(i == effective_n_chunks - 1),
+                    "done": bool(i == effective_n_chunks - 1 or terminated),
                     "node_count": N,
                     "n_nodes": N,
                     "thermo": case.thermo,
@@ -580,6 +605,10 @@ def solve_case_stream(
                     "ext_idx": ext_idx,
                 }
             )
+
+        if terminated:
+            message = "terminated by event"
+            break
 
     if t_out:
         t_final = np.concatenate(t_out)

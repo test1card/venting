@@ -23,8 +23,8 @@ def _single_node():
 
 def test_variable_thermo_regression_near_300k():
     nodes, edges, bcs = _single_node()
-    c_int = CaseConfig("intermediate", 0.0, T0, 0.005, 40)
-    c_var = CaseConfig("variable", 0.0, T0, 0.005, 40)
+    c_int = CaseConfig("intermediate", 0.0, T0, 0.3, 100)
+    c_var = CaseConfig("variable", 0.0, T0, 0.3, 100)
     r_int = summarize_result(
         nodes, edges, bcs, c_int, solve_case(nodes, edges, bcs, c_int)
     )
@@ -33,6 +33,10 @@ def test_variable_thermo_regression_near_300k():
     )
     rel = np.max(np.abs(r_var.P[0] - r_int.P[0]) / np.maximum(r_int.P[0], 1.0))
     assert float(rel) <= 0.01
+    rel_T = np.max(
+        np.abs(r_var.T[0] - r_int.T[0]) / np.maximum(np.abs(r_int.T[0]), 1.0)
+    )
+    assert float(rel_T) <= 0.05
 
 
 def test_variable_gamma_changes_mdot():

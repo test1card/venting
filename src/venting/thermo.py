@@ -61,7 +61,7 @@ def h_air(T: float) -> float:
 
 def u_air(T: float) -> float:
     t = min(max(float(T), 1.0), T_FIT_HIGH)
-    return h_air(t) - R_GAS * (t - _T_REF)
+    return h_air(t) - R_GAS * t
 
 
 def speed_of_sound(T: float) -> float:

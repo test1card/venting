@@ -287,13 +287,13 @@ def main() -> None:
         preset = get_default_panel_preset_v9()
         net_cfg = NetworkConfig(
             N_chain=10,
-            N_par=args.n_int,
+            N_par=2,
             V_cell=preset.V_cell,
             V_vest=preset.V_vest,
             A_wall_cell=preset.A_wall_cell,
             A_wall_vest=preset.A_wall_vest,
             d_int_mm=args.d_int,
-            n_int_per_interface=1,
+            n_int_per_interface=args.n_int,
             d_exit_mm=args.d_exit,
             n_exit=args.n_exit,
             Cd_int=args.cd_int,

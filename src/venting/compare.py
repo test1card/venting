@@ -39,10 +39,17 @@ def load_run(run_dir: Path) -> dict:
 
 def compare_runs(run_a: dict, run_b: dict) -> dict:
     """Compare run metrics and return structured differences."""
-    t_final_a = run_a["P"][:, -1]
-    t_final_b = run_b["P"][:, -1]
-    tA = run_a["T"][:, -1]
-    tB = run_b["T"][:, -1]
+    Pa = run_a["P"][:, -1]
+    Pb = run_b["P"][:, -1]
+    Ta = run_a["T"][:, -1]
+    Tb = run_b["T"][:, -1]
+
+    if Pa.shape == Pb.shape:
+        max_final_P_diff = float(np.max(np.abs(Pb - Pa)))
+        max_final_T_diff = float(np.max(np.abs(Tb - Ta)))
+    else:
+        max_final_P_diff = float("nan")
+        max_final_T_diff = float("nan")
 
     delta_summary = {}
     by_edge_a = {row["edge"]: row for row in run_a.get("summary", [])}
@@ -68,8 +75,8 @@ def compare_runs(run_a: dict, run_b: dict) -> dict:
         "run_a": str(run_a["dir"]),
         "run_b": str(run_b["dir"]),
         "edge_deltas": delta_summary,
-        "max_final_P_diff": float(np.max(np.abs(t_final_b - t_final_a))),
-        "max_final_T_diff": float(np.max(np.abs(tB - tA))),
+        "max_final_P_diff": max_final_P_diff,
+        "max_final_T_diff": max_final_T_diff,
         "rel_tau_exit_delta": float(rel_tau),
     }
 
