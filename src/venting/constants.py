@@ -20,3 +20,6 @@ P_STOP = 5.0
 
 PI_C = (2.0 / (GAMMA + 1.0)) ** (GAMMA / (GAMMA - 1.0))
 C_CHOKED = math.sqrt(GAMMA * (2.0 / (GAMMA + 1.0)) ** ((GAMMA + 1.0) / (GAMMA - 1.0)))
+
+# Stefan-Boltzmann constant [W/(m^2 K^4)]
+SIGMA_SB = 5.670374419e-8

@@ -4,7 +4,18 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from .cases import CaseConfig
-from .constants import C_CHOKED, C_P, C_V, GAMMA, M_SAFE, P0, R_GAS, T0, T_SAFE
+from .constants import (
+    C_CHOKED,
+    C_P,
+    C_V,
+    GAMMA,
+    M_SAFE,
+    P0,
+    R_GAS,
+    SIGMA_SB,
+    T0,
+    T_SAFE,
+)
 from .flow import (
     mdot_fanno_tube,
     mdot_orifice_pos_props,
@@ -20,8 +31,6 @@ from .graph import (
     SlotChannelEdge,
 )
 from .thermo import cp_air, cv_air, gamma_air, h_air, u_air
-
-SIGMA_SB = 5.670374419e-8
 
 
 def _mdot_short_edge(
