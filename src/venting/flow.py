@@ -65,13 +65,18 @@ def mdot_slot_pos(
 
 
 def friction_factor(Re: float, eps_over_D: float) -> float:
-    """Darcy friction factor (not Fanning)."""
+    """Darcy friction factor (not Fanning), with laminar-turbulent blending."""
     if Re <= 0.0:
         return 0.0
-    if Re < 2300.0:
-        return 64.0 / Re
+    f_lam = 64.0 / Re
+    if Re < 2000.0:
+        return f_lam
     term = eps_over_D / 3.7 + 5.74 / (Re**0.9)
-    return 0.25 / (math.log10(max(term, 1e-20)) ** 2)
+    f_turb = 0.25 / (math.log10(max(term, 1e-20)) ** 2)
+    if Re > 4000.0:
+        return f_turb
+    w = (Re - 2000.0) / 2000.0
+    return (1.0 - w) * f_lam + w * f_turb
 
 
 def mdot_short_tube_pos(

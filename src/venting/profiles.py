@@ -1,4 +1,5 @@
 import math
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,12 +47,16 @@ def make_profile_step(p0: float, step_time_s: float) -> Profile:
 def make_profile_exponential(
     p0: float, rate0_mmhg_per_s: float, p_floor: float = 10.0
 ) -> Profile:
+    if rate0_mmhg_per_s <= 0.0:
+        raise ValueError("rate0_mmhg_per_s must be positive")
+    if p_floor <= 0.0:
+        raise ValueError("p_floor must be positive")
     rate0 = rate0_mmhg_per_s * 133.322
     tau = p0 / rate0
     t_floor = tau * math.log(p0 / p_floor)
 
     def p_fn(t: float) -> float:
-        return p0 * math.exp(-t / tau)
+        return max(p0 * math.exp(-t / tau), p_floor)
 
     return Profile(
         "barometric_exp",
@@ -84,9 +89,10 @@ def make_profile_from_table(
 
     p_max = float(np.max(p_tab))
     if pressure_unit.lower() == "pa" and 200.0 <= p_max <= 2000.0:
-        raise ValueError(
+        warnings.warn(
             "Profile table pressure looks like mmHg values provided as Pa. "
-            "Use pressure_unit='mmHg' or convert CSV to Pa."
+            "Use pressure_unit='mmHg' or convert CSV to Pa.",
+            stacklevel=2,
         )
 
     def p_fn(t: float) -> float:

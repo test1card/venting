@@ -4,10 +4,11 @@ import math
 
 import numpy as np
 
-from .constants import D_MOL_AIR, GAMMA, K_BOLTZMANN, R_GAS, T_SAFE
+from .constants import D_MOL_AIR, GAMMA, K_BOLTZMANN, R_GAS, T0, T_SAFE
 from .flow import (
     fanno_choked_state,
     friction_factor,
+    mdot_fanno_tube,
     mdot_short_tube_pos,
     mu_air_sutherland,
 )
@@ -152,18 +153,32 @@ def _short_tube_flag(
                 t_up = float(T[up_idx, k])
 
             t_up = max(t_up, T_SAFE)
-            md = mdot_short_tube_pos(
-                p_up,
-                t_up,
-                p_dn,
-                cd0,
-                e.A_total,
-                e.D,
-                e.L,
-                e.eps,
-                e.K_in,
-                e.K_out,
-            )
+            if e.fanno:
+                md = mdot_fanno_tube(
+                    p_up,
+                    t_up,
+                    p_dn,
+                    cd0,
+                    e.A_total,
+                    e.D,
+                    e.L,
+                    e.eps,
+                    e.K_in,
+                    e.K_out,
+                )
+            else:
+                md = mdot_short_tube_pos(
+                    p_up,
+                    t_up,
+                    p_dn,
+                    cd0,
+                    e.A_total,
+                    e.D,
+                    e.L,
+                    e.eps,
+                    e.K_in,
+                    e.K_out,
+                )
             rho = p_up / (R_GAS * t_up)
             u = md / max(rho * e.A_total, 1e-18)
             a_s = math.sqrt(GAMMA * R_GAS * t_up)
@@ -256,7 +271,11 @@ def _knudsen_flag(
                 t_up = float(T[a, k])
             else:
                 p_up = pb
-                t_up = float(T[a, k] if b == EXT_NODE else T[b, k])
+                if b == EXT_NODE:
+                    # External atmosphere T not in T array; use T0 as estimate
+                    t_up = float(T0)
+                else:
+                    t_up = float(T[b, k])
             p_up = max(p_up, 1e-9)
             t_up = max(t_up, T_SAFE)
             mfp = (

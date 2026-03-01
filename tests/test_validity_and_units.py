@@ -11,11 +11,12 @@ from venting.profiles import Profile, make_profile_from_table
 from venting.solver import solve_case
 
 
-def test_profile_table_rejects_mmhg_looking_values_when_unit_pa(tmp_path: Path):
+def test_profile_table_warns_mmhg_looking_values_when_unit_pa(tmp_path: Path):
     p = tmp_path / "profile.csv"
     p.write_text("0,760\n1,740\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="looks like mmHg"):
-        make_profile_from_table("tab", p, pressure_unit="Pa")
+    with pytest.warns(UserWarning, match="looks like mmHg"):
+        prof = make_profile_from_table("tab", p, pressure_unit="Pa")
+    assert prof.P(0.0) > 0
 
 
 def test_profile_table_accepts_mmhg_when_explicit(tmp_path: Path):
