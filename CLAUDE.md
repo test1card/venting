@@ -26,13 +26,13 @@ venting/
 │   ├── __init__.py       # Version: 10.0.0
 │   ├── __main__.py       # `python -m venting` entry point
 │   ├── cli.py            # Argparse CLI (subcommands: gate, sweep, sweep2d, …)
-│   ├── constants.py      # Physical constants (γ, R, π_c, safety thresholds)
-│   ├── cases.py          # Frozen dataclasses: CaseConfig, NetworkConfig, SolveResult
+│   ├── constants.py      # Physical constants (γ, R, π_c, σ_SB, k_B, safety thresholds)
+│   ├── cases.py          # Frozen dataclasses: CaseConfig, NetworkConfig; mutable SolveResult
 │   ├── geometry.py       # Unit converters (mm↔m, circle area)
 │   ├── profiles.py       # External pressure profiles (linear/step/barometric/table)
-│   ├── graph.py          # Network topology builder: GasNode, Orifice, ShortTube, SlotChannel
-│   ├── flow.py           # Mass-flow functions: orifice, short_tube, slot, Fanno, Sutherland
-│   ├── solver.py         # ODE RHS, solve_ivp (Radau), sparsity, events, streaming
+│   ├── graph.py          # Network topology builder: GasNode, OrificeEdge, ShortTubeEdge, SlotChannelEdge
+│   ├── flow.py           # Mass-flow functions: orifice, short_tube, slot, Fanno; viscosity (Sutherland)
+│   ├── solver.py         # ODE RHS, solve_ivp (Radau), events, streaming
 │   ├── diagnostics.py    # Peak detection, τ_exit, pressure regime classification
 │   ├── validity.py       # Physical validity flags (acoustic timescale, Re, Mach, thermo)
 │   ├── gates.py          # 5 analytical gate tests (single-node, two-node, conservation)
@@ -42,14 +42,15 @@ venting/
 │   ├── plotting.py       # Matplotlib ΔP-vs-time visualization (Agg backend)
 │   ├── montecarlo.py     # Latin-hypercube parametric sampling
 │   ├── presets.py        # Default panel geometry (volumes, wall areas)
-│   ├── thermo.py         # NASA-7 polynomial fits: cp(T), cv(T), γ(T), h(T)
+│   ├── thermo.py         # NASA-7 polynomial fits: cp(T), cv(T), γ(T), h(T), u(T), speed_of_sound(T)
 │   ├── state_layout.py   # ODE state-vector slicing (m, T, T_wall indices)
 │   └── gui/              # Optional PySide6/pyqtgraph desktop interface
+│       ├── __init__.py
 │       ├── main.py
 │       ├── app.py
 │       ├── config.py
 │       └── state_layout.py
-├── tests/                # pytest test suite (~900 lines, 15 files)
+├── tests/                # pytest test suite (~1000 lines, 15 files)
 ├── docs/                 # Markdown physics docs and verification criteria
 ├── archive/              # Legacy monolithic script (reference only, not imported)
 ├── .github/workflows/    # CI: Python 3.10–3.12 matrix, ruff, black, pytest
@@ -69,7 +70,7 @@ venting/
 # Install in editable mode with dev dependencies
 pip install -e ".[dev]"
 
-# Install pre-commit hooks (ruff + black auto-fix on every commit)
+# Install pre-commit hooks (ruff check + ruff format + black on every commit)
 pre-commit install
 ```
 
@@ -109,7 +110,7 @@ black .               # Format (line-length 88)
 black --check .       # Format check only
 ```
 
-Pre-commit hooks run ruff and black automatically on `git commit`.
+Pre-commit hooks run ruff (check + format) and black automatically on `git commit`.
 
 ---
 
@@ -123,7 +124,7 @@ python -m venting gate --two      # Two-node validation only
 python -m venting sweep           # 1D parameter sweep (d_int, d_exit, Cd)
 python -m venting sweep2d         # 2D grid sweep
 python -m venting thermal         # Multi-h thermal sensitivity
-python -m venting montecarlo      # Latin-hypercube parametric sampling
+python -m venting mc              # Latin-hypercube parametric sampling
 
 python -m venting compare dir1 dir2   # Compare two run result directories
 
@@ -142,8 +143,7 @@ NetworkConfig / CaseConfig
         │
         ▼
     solver.py ──► constructs ODE RHS using flow.py functions
-        │          applies sparsity pattern for Radau Jacobian
-        │          integrates with scipy.integrate.solve_ivp
+        │          integrates with scipy.integrate.solve_ivp (Radau, dense Jacobian)
         ▼
     SolveResult (time array + state array)
         │
@@ -166,13 +166,12 @@ For a network with `N` nodes:
 
 ## Key Dataclasses (`cases.py`)
 
-All config objects are **frozen dataclasses** (immutable after construction).
-
-- **`CaseConfig`** — thermodynamic mode (`"isothermal"` / `"intermediate"` / `"variable"`),
+- **`CaseConfig`** (`frozen=True`) — thermodynamic mode (`"isothermal"` / `"intermediate"` / `"variable"`),
   wall model settings, external model selection.
-- **`NetworkConfig`** — node volumes/temperatures, edge geometry (diameters, Cd, lengths),
-  network topology (n_cells, n_chains, vestibule flag).
-- **`SolveResult`** — `t`, `y` arrays from solve_ivp, plus metadata.
+- **`NetworkConfig`** (`frozen=True`) — node volumes/temperatures, edge geometry (diameters, Cd, lengths),
+  network topology (`N_chain`, `N_par`, `topology`).
+- **`SolveResult`** (mutable `@dataclass`) — `t`, `m`, `T`, `P`, `P_ext`, `peak_diag`,
+  `max_dP`, `tau_exit`, `meta`.
 
 ---
 
@@ -180,12 +179,13 @@ All config objects are **frozen dataclasses** (immutable after construction).
 
 | Model | Function | Notes |
 |-------|----------|-------|
-| Sharp-edged orifice | `mdot_orifice(...)` | Cd-based, choked/subsonic |
-| Short-tube | `mdot_short_tube(...)` | Darcy friction + K_in/K_out minor losses; uses effective Cd, not Fanno |
-| Slot channel | `mdot_slot(...)` | Viscous laminar (Poiseuille) |
-| Fanno flow | `mdot_fanno(...)` | Friction-limited choked flow (available but not default in v10) |
+| Sharp-edged orifice | `mdot_orifice_pos(...)` / `mdot_orifice_pos_props(...)` | Cd-based, choked/subsonic |
+| Short-tube | `mdot_short_tube_pos(...)` | Darcy friction + K_in/K_out minor losses; uses effective Cd, not Fanno |
+| Slot channel | `mdot_slot_pos(...)` | Viscous laminar (Poiseuille) |
+| Fanno flow | `mdot_fanno_tube(...)` | Friction-limited choked flow (available but not default in v10) |
+| Viscosity helper | `mu_air_sutherland(T)` | Sutherland dynamic viscosity for air |
 
-**Sentinel values** (defined in `constants.py`):
+**Sentinel values** (defined in `graph.py`):
 - `EXT_NODE = -1` — marks external-atmosphere boundary nodes
 - `M_SAFE`, `T_SAFE` — minimum safe mass/temperature to avoid division by zero
 - `P_STOP` — solver early-stop pressure threshold
@@ -201,7 +201,7 @@ All config objects are **frozen dataclasses** (immutable after construction).
 | `"variable"` | Same as intermediate + NASA-7 `cp(T)`, `cv(T)`, `γ(T)` | Most accurate |
 
 Use `thermo.py` functions when `mode == "variable"`. The NASA-7 fits are valid for
-air in the range ~200–2000 K.
+air in the range 200–1000 K.
 
 ---
 
@@ -244,13 +244,16 @@ Profiles define `P_ext(t)` for the environment node:
 
 ## Validity Checks (`validity.py`)
 
-After each solve, `validity.py` produces flags:
+After each solve, `validity.py` produces 7 flags via `evaluate_validity_flags()`:
 
-- **Acoustic timescale:** Is the ODE timestep >> acoustic propagation time? (0D
-  assumption must hold.)
-- **Thermodynamic range:** Are temperatures within NASA-7 polynomial validity?
-- **Short-tube Re/Mach:** Is viscous laminar assumption self-consistent?
-- **Friction factor:** Is Darcy friction in the expected regime?
+- **`state_integrity`:** No NaN/Inf, positive mass and temperature.
+- **`acoustic_uniformity_0D`:** Is dynamic timescale >> acoustic propagation time?
+  (0D assumption must hold.)
+- **`thermo_fit_range`:** Are temperatures within NASA-7 polynomial range (200–1000 K)?
+- **`slot_laminarity`:** Is slot channel Reynolds number in the laminar regime?
+- **`short_tube_flow`:** Re, Mach, K_tot, Cd_eff, Fanno choking fraction.
+- **`knudsen_regime`:** Knudsen number check (continuum vs slip vs free-molecular).
+- **`external_pressure_units`:** Warns if P_ext values look like mmHg entered as Pa.
 
 Always inspect validity flags before trusting results.
 
@@ -305,7 +308,8 @@ All steps must pass before merging.
   friction-choking is implemented but not the default.
 - **Streaming vs. batch solve:** Results agree within integrator tolerances but
   may differ at the last decimal place due to chunking.
-- **GUI packaging:** Bundling as a standalone executable is a known TODO.
+- **GUI packaging:** Windows EXE via PyInstaller is automated in `build_windows.yml`;
+  other platforms are not yet automated.
 
 ---
 
