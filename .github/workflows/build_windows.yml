@@ -33,6 +33,16 @@ jobs:
       - name: Build EXE
         run: python build_windows.py
 
+      - name: Smoke test — CLI help
+        run: |
+          dist\venting_cli.exe --help
+        shell: cmd
+
+      - name: Smoke test — CLI gate
+        run: |
+          dist\venting_cli.exe gate --single
+        shell: cmd
+
       - name: Get short SHA
         id: sha
         run: echo "short=$("${{ github.sha }}".Substring(0,7))" >> $env:GITHUB_OUTPUT
@@ -55,9 +65,18 @@ jobs:
             Automatic build from `main` branch.
             Commit: ${{ github.sha }}
 
-            **Download:** `venting.exe` from Assets below.
-            Runs without installing Python.
-          files: dist/venting.exe
+            **Downloads:**
+            - `venting.exe` — GUI application (double-click to launch)
+            - `venting_cli.exe` — CLI version (run from terminal with subcommands)
+
+            Both run without installing Python.
+
+            **Crash logs:** If `venting.exe` fails to start, check:
+            - `%LOCALAPPDATA%\venting\logs\boot.log`
+            - `%LOCALAPPDATA%\venting\logs\crash.log`
+          files: |
+            dist/venting.exe
+            dist/venting_cli.exe
           prerelease: false
           make_latest: true
         env:

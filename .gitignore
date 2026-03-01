@@ -10,3 +10,5 @@ results/
 *.egg-info/
 .coverage
 htmlcov/
+build/
+dist/

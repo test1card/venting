@@ -1,4 +1,4 @@
-# venting.spec — GUI executable (console=False, launches GUI on double-click)
+# venting_cli.spec — CLI executable (console=True, for terminal usage)
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
@@ -20,12 +20,10 @@ hidden_imports = [
 datas = [
     *collect_data_files('pyqtgraph'),
     *collect_data_files('scipy'),
-    # PySide6 Qt plugins (platforms/qwindows.dll, styles, imageformats, etc.)
     *collect_data_files('PySide6', subdir='plugins'),
     *collect_data_files('PySide6', subdir='translations'),
 ]
 
-# PySide6 shared libraries that PyInstaller hooks may miss
 try:
     from PyInstaller.utils.hooks import collect_dynamic_libs
     binaries = collect_dynamic_libs('PySide6')
@@ -48,17 +46,16 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
-    name='venting',
+    name='venting_cli',
     debug=False,
     strip=False,
     upx=True,
     upx_exclude=[
-        # Never UPX-compress Qt/PySide6 binaries — causes loader failures
         'Qt6*.dll',
         'pyside6*.dll',
         'shiboken6*.dll',
         '*.pyd',
     ],
-    console=False,
+    console=True,
     runtime_tmpdir=None,
 )
