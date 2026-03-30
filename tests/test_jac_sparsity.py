@@ -8,7 +8,7 @@ from venting.solver import solve_case
 
 
 def test_solver_does_not_use_identity_only_jac_sparsity_hint():
-    src = Path("src/venting/solver.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parent.parent / "src" / "venting" / "solver.py").read_text(encoding="utf-8")
     assert "jac_sparsity" not in src
 
 

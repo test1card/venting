@@ -65,7 +65,7 @@ def gate_single() -> GateMetrics:
             for k in range(len(ad.t))
         ]
     )
-    m_out = float(np.trapz(mdot, ad.t))
+    m_out = float(np.trapezoid(mdot, ad.t))
     errMass = abs((mf + m_out) - m0) / m0
 
     return GateMetrics(errP=errP, errT=errT, errMass=errMass)
@@ -96,11 +96,11 @@ def gate_two() -> GateMetrics:
         ],
         dtype=float,
     )
-    m_out = float(np.trapz(mdot, res.t))
+    m_out = float(np.trapezoid(mdot, res.t))
     errMass = abs((m_total_f + m_out) - m_total_0) / m_total_0
 
     E0 = float(np.sum(res.m[:, 0] * C_V * res.T[:, 0]))
     Ef = float(np.sum(res.m[:, -1] * C_V * res.T[:, -1]))
-    Eout = float(np.trapz(mdot * C_P * np.maximum(res.T[0, :], T_SAFE), res.t))
+    Eout = float(np.trapezoid(mdot * C_P * np.maximum(res.T[0, :], T_SAFE), res.t))
     errE = abs((Ef + Eout) - E0) / E0
     return GateMetrics(errP=0.0, errT=0.0, errMass=errMass, errEnergy=errE)
