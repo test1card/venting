@@ -12,3 +12,9 @@ results/
 htmlcov/
 build/
 dist/
+
+# --- push-prep hardening (2026-06-18): secrets ---
+.env
+.env.*
+.mcp.json
+.DS_Store
